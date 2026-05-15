@@ -427,6 +427,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Sign In Button -->
                     <button type="submit" class="btn-signin">Sign In</button>
 
+                    <!-- Affected Login Button -->
+                    <a href="affected_login.php" style="text-decoration: none;">
+                        <button type="button" class="btn-signin" style="background-color: #f5f5f5; color: #1a1a1a; border: 1px solid #ddd; margin-top: 1rem;">Affected Person Login</button>
+                    </a>
+
                     <!-- Sign Up Link -->
                     <div class="signup-link">
                         Don't have an account? <a href="signup.php">Sign up here</a>
