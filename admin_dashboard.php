@@ -153,6 +153,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error_msg = "Failed to remove manager.";
             }
         }
+
+        // Task Actions
+        if ($action === 'add_task') {
+            $name = sanitize($_POST['task_name']);
+            $desc = sanitize($_POST['description']);
+            $camp_id = intval($_POST['camp_id']);
+            $vol_id = intval($_POST['assigned_to']);
+            $priority = sanitize($_POST['priority']);
+            $due_date = sanitize($_POST['due_date']);
+            $admin_id = $_SESSION['user_id'];
+            
+            $insert = $conn->query("INSERT INTO tasks (task_name, description, camp_id, assigned_to, assigned_by, priority, due_date, status) VALUES ('$name', '$desc', $camp_id, $vol_id, $admin_id, '$priority', '$due_date', 'pending')");
+            if ($insert) {
+                $success_msg = "Task assigned successfully.";
+            } else {
+                $error_msg = "Failed to assign task.";
+            }
+        }
+
+        if ($action === 'edit_task') {
+            $task_id = intval($_POST['task_id']);
+            $name = sanitize($_POST['task_name']);
+            $desc = sanitize($_POST['description']);
+            $camp_id = intval($_POST['camp_id']);
+            $vol_id = intval($_POST['assigned_to']);
+            $priority = sanitize($_POST['priority']);
+            $due_date = sanitize($_POST['due_date']);
+            $status = sanitize($_POST['status']);
+            
+            $update = $conn->query("UPDATE tasks SET task_name = '$name', description = '$desc', camp_id = $camp_id, assigned_to = $vol_id, priority = '$priority', due_date = '$due_date', status = '$status' WHERE id = $task_id");
+            if ($update) {
+                $success_msg = "Task updated successfully.";
+            } else {
+                $error_msg = "Failed to update task.";
+            }
+        }
+
+        if ($action === 'delete_task') {
+            $task_id = intval($_POST['task_id']);
+            $delete = $conn->query("DELETE FROM tasks WHERE id = $task_id");
+            if ($delete) {
+                $success_msg = "Task removed successfully.";
+            } else {
+                $error_msg = "Failed to remove task.";
+            }
+        }
     }
 }
 
@@ -217,6 +263,21 @@ if ($page === 'managers') {
     ");
     while($row = $managers_list_res->fetch_assoc()) {
         $managers_list[] = $row;
+    }
+}
+
+// Fetch Tasks Data
+$tasks_list = [];
+if ($page === 'tasks') {
+    $tasks_res = $conn->query("
+        SELECT t.*, u.full_name as volunteer_name, c.camp_name 
+        FROM tasks t 
+        LEFT JOIN users u ON t.assigned_to = u.id 
+        LEFT JOIN camps c ON t.camp_id = c.id 
+        ORDER BY t.created_at DESC
+    ");
+    while($row = $tasks_res->fetch_assoc()) {
+        $tasks_list[] = $row;
     }
 }
 ?>
@@ -357,6 +418,7 @@ if ($page === 'managers') {
                 <li class="menu-item"><a href="admin_dashboard.php?page=camps" class="menu-link <?php echo $page === 'camps' ? 'active' : ''; ?>"><span class="menu-icon">⛺</span>Camps</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=volunteers" class="menu-link <?php echo $page === 'volunteers' ? 'active' : ''; ?>"><span class="menu-icon">🧑‍🤝‍🧑</span>Volunteers<span class="menu-badge">6</span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=donations" class="menu-link <?php echo $page === 'donations' ? 'active' : ''; ?>"><span class="menu-icon">💵</span>Donations</a></li>
+                <li class="menu-item"><a href="admin_dashboard.php?page=tasks" class="menu-link <?php echo $page === 'tasks' ? 'active' : ''; ?>"><span class="menu-icon">📋</span>Task Assignment</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=inventory" class="menu-link <?php echo $page === 'inventory' ? 'active' : ''; ?>"><span class="menu-icon">📦</span>Inventory</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge">3</span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=reports" class="menu-link <?php echo $page === 'reports' ? 'active' : ''; ?>"><span class="menu-icon">📈</span>Reports</a></li>
@@ -371,6 +433,7 @@ if ($page === 'managers') {
                     <div class="topbar-subtitle">Manage operations safely from a single control center</div>
                 </div>
                 <div class="topbar-actions">
+
                     <?php if ($page === 'camps'): ?>
                         <button type="button" class="btn-primary" onclick="openAddCampModal()">+ Add New Camp</button>
                     <?php elseif ($page === 'managers'): ?>
@@ -711,6 +774,98 @@ if ($page === 'managers') {
                         <div class="form-field"><label>System Status</label><input type="text" value="All systems operational" disabled></div>
                         <button class="btn-secondary" type="button" onclick="alert('Settings saved');">Save Settings</button>
                     </div>
+                <?php elseif ($page === 'tasks'): ?>
+                    <div class="page-header">
+                        <div>
+                            <div class="page-title">Task Assignment & Tracking</div>
+                            <div class="page-subtitle">Assign responsibilities to volunteers and track progress</div>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="openAddTaskModal()">+ Assign New Task</button>
+                    </div>
+                    
+                    <div class="search-box" style="margin-bottom: 1.5rem;">
+                        <input id="taskSearch" type="text" placeholder="Search tasks by name, volunteer or camp...">
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-heading">
+                            <h3>Active Task Assignments</h3>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="table" id="tasksTable">
+                                <thead>
+                                    <tr>
+                                        <th>Task Name</th>
+                                        <th>Assigned To</th>
+                                        <th>Camp</th>
+                                        <th>Priority</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($tasks_list)): ?>
+                                        <tr><td colspan="7" style="text-align:center; padding:3rem; color:#6b7280;">No tasks found. Assign your first task to get started.</td></tr>
+                                    <?php endif; ?>
+                                    <?php foreach ($tasks_list as $task): ?>
+                                        <tr class="task-row">
+                                            <td>
+                                                <div style="font-weight:600; color:#111827;"><?php echo htmlspecialchars($task['task_name']); ?></div>
+                                                <div style="font-size:0.75rem; color:#6b7280; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="<?php echo htmlspecialchars($task['description']); ?>">
+                                                    <?php echo htmlspecialchars($task['description']); ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                                    <div class="profile-avatar" style="width:28px; height:28px; font-size:0.7rem;">
+                                                        <?php echo strtoupper(substr($task['volunteer_name'] ?? 'U', 0, 1)); ?>
+                                                    </div>
+                                                    <span><?php echo htmlspecialchars($task['volunteer_name'] ?? 'Unassigned'); ?></span>
+                                                </div>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($task['camp_name'] ?? 'N/A'); ?></td>
+                                            <td>
+                                                <?php 
+                                                    $pColor = '#6b7280';
+                                                    if($task['priority'] === 'high') $pColor = '#ef4444';
+                                                    if($task['priority'] === 'medium') $pColor = '#f59e0b';
+                                                ?>
+                                                <span style="display:inline-flex; align-items:center; gap:0.25rem; color:<?php echo $pColor; ?>; font-weight:600; font-size:0.85rem;">
+                                                    ● <?php echo ucfirst($task['priority']); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo date('M d, H:i', strtotime($task['due_date'])); ?></td>
+                                            <td>
+                                                <?php
+                                                    $sClass = 'inactive';
+                                                    if($task['status'] === 'in_progress') $sClass = 'active';
+                                                    if($task['status'] === 'completed') $sClass = 'active'; // or define a success class
+                                                    
+                                                    $sStyle = "";
+                                                    if($task['status'] === 'completed') $sStyle = "background:#ecfdf5; color:#059669;";
+                                                    if($task['status'] === 'in_progress') $sStyle = "background:#fffbeb; color:#d97706;";
+                                                ?>
+                                                <span class="badge <?php echo $sClass; ?>" style="<?php echo $sStyle; ?>">
+                                                    <?php echo ucfirst(str_replace('_', ' ', $task['status'])); ?>
+                                                </span>
+                                            </td>
+                                            <td class="table-actions">
+                                                <div style="display:flex; gap:0.5rem;">
+                                                    <button class="btn-secondary" style="padding:0.4rem; border-radius:8px;" onclick='openEditTaskModal(<?php echo json_encode($task); ?>)'>Edit</button>
+                                                    <form method="POST" onsubmit="return confirm('Delete this task?');" style="display:inline;">
+                                                        <input type="hidden" name="action" value="delete_task">
+                                                        <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                                        <button class="btn-danger" type="submit" style="padding:0.4rem; border-radius:8px;">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 <?php endif; ?>
             </div>
         </main>
@@ -824,6 +979,37 @@ if ($page === 'managers') {
         function closeEditManagerModal() {
             document.getElementById('editManagerModal').style.display = 'none';
         }
+
+        function openAddTaskModal() {
+            document.getElementById('addTaskModal').style.display = 'grid';
+        }
+
+        function closeAddTaskModal() {
+            document.getElementById('addTaskModal').style.display = 'none';
+        }
+
+        function openEditTaskModal(task) {
+            document.getElementById('edit_task_id').value = task.id;
+            document.getElementById('edit_task_name').value = task.task_name;
+            document.getElementById('edit_task_desc').value = task.description;
+            document.getElementById('edit_task_camp').value = task.camp_id;
+            document.getElementById('edit_task_vol').value = task.assigned_to;
+            document.getElementById('edit_task_priority').value = task.priority;
+            document.getElementById('edit_task_due').value = task.due_date.replace(' ', 'T').substring(0, 16);
+            document.getElementById('edit_task_status').value = task.status;
+            document.getElementById('editTaskModal').style.display = 'grid';
+        }
+
+        function closeEditTaskModal() {
+            document.getElementById('editTaskModal').style.display = 'none';
+        }
+
+        document.getElementById('taskSearch')?.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            document.querySelectorAll('#tasksTable tbody tr').forEach(function(row) {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+            });
+        });
 
         function toggleProfileMenu() {
             const dropdown = document.getElementById('profileDropdown');
@@ -956,6 +1142,122 @@ if ($page === 'managers') {
                 <div class="form-field"><label>Capacity</label><input type="number" name="capacity" id="edit_capacity" required></div>
                 <div style="display:flex; gap:1rem; margin-top:1.5rem;">
                     <button type="button" class="btn-secondary" style="flex:1;" onclick="closeEditCampModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="flex:1;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Add Task Modal -->
+    <div id="addTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
+        <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+            <div class="panel-heading">
+                <h3>Assign New Task</h3>
+                <button type="button" onclick="closeAddTaskModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_task">
+                <div class="form-field">
+                    <label>Task Name</label>
+                    <input type="text" name="task_name" placeholder="e.g. Distribute Food" required>
+                </div>
+                <div class="form-field">
+                    <label>Description</label>
+                    <textarea name="description" placeholder="Describe the task details..." required></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Camp</label>
+                    <select name="camp_id" required>
+                        <option value="">Select Camp</option>
+                        <?php foreach ($camps as $c): ?>
+                            <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['camp_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Assign To (Volunteer)</label>
+                    <select name="assigned_to" required>
+                        <option value="">Select Volunteer</option>
+                        <?php foreach ($volunteers as $v): ?>
+                            <option value="<?php echo $v['id']; ?>"><?php echo htmlspecialchars($v['full_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Priority</label>
+                    <select name="priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Due Date</label>
+                    <input type="datetime-local" name="due_date" required>
+                </div>
+                <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+                    <button type="button" class="btn-secondary" style="flex:1;" onclick="closeAddTaskModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="flex:1;">Assign Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+    <div id="editTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
+        <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+            <div class="panel-heading">
+                <h3>Edit Task Assignment</h3>
+                <button type="button" onclick="closeEditTaskModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="edit_task">
+                <input type="hidden" name="task_id" id="edit_task_id">
+                <div class="form-field">
+                    <label>Task Name</label>
+                    <input type="text" name="task_name" id="edit_task_name" required>
+                </div>
+                <div class="form-field">
+                    <label>Description</label>
+                    <textarea name="description" id="edit_task_desc" required></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Camp</label>
+                    <select name="camp_id" id="edit_task_camp" required>
+                        <?php foreach ($camps as $c): ?>
+                            <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['camp_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Assign To</label>
+                    <select name="assigned_to" id="edit_task_vol" required>
+                        <?php foreach ($volunteers as $v): ?>
+                            <option value="<?php echo $v['id']; ?>"><?php echo htmlspecialchars($v['full_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Priority</label>
+                    <select name="priority" id="edit_task_priority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Due Date</label>
+                    <input type="datetime-local" name="due_date" id="edit_task_due" required>
+                </div>
+                <div class="form-field">
+                    <label>Status</label>
+                    <select name="status" id="edit_task_status">
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+                    <button type="button" class="btn-secondary" style="flex:1;" onclick="closeEditTaskModal()">Cancel</button>
                     <button type="submit" class="btn-primary" style="flex:1;">Save Changes</button>
                 </div>
             </form>
