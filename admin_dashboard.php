@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
- 
+
         if ($action === 'edit_manager') {
             $mgr_id = intval($_POST['manager_id']);
             $name = sanitize($_POST['full_name']);
@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'delete_manager') {
             $mgr_id = intval($_POST['manager_id']);
-            // First unassign from camps
+
             $conn->query("UPDATE camps SET manager_id = NULL WHERE manager_id = $mgr_id");
             $delete = $conn->query("DELETE FROM users WHERE id = $mgr_id AND role = 'camp_manager'");
             if ($delete) {
@@ -140,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error_msg = "Failed to remove manager.";
             }
         }
+
 
         if ($action === 'add_task') {
             $name = sanitize($_POST['task_name']);
@@ -226,18 +227,29 @@ while($row = $volunteers_res->fetch_assoc()) {
     $volunteers[] = $row;
 }
 
+
 $managers_res = $conn->query("SELECT id, full_name FROM users WHERE role = 'camp_manager'");
 $managers = [];
 while($row = $managers_res->fetch_assoc()) {
     $managers[] = $row;
 }
 
+
 $managers_list = [];
 if ($page === 'managers') {
+    $managers_list_res = $conn->query("
+        SELECT u.*, GROUP_CONCAT(c.camp_name SEPARATOR ', ') as assigned_camps 
+        FROM users u 
+        LEFT JOIN camps c ON u.id = c.manager_id 
+        WHERE u.role = 'camp_manager' 
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+    ");
     while($row = $managers_list_res->fetch_assoc()) {
         $managers_list[] = $row;
     }
 }
+
 
 $tasks_list = [];
 if ($page === 'tasks') {
@@ -877,7 +889,7 @@ if ($page === 'tasks') {
         }
     </script>
 
- 
+
     <div id="addCampModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -963,7 +975,7 @@ if ($page === 'tasks') {
             });
         }
 
-   
+
         function openAddTaskModal() {
             document.getElementById('addTaskModal').style.display = 'grid';
         }
