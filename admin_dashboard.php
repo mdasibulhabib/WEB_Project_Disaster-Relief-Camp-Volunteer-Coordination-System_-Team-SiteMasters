@@ -23,7 +23,7 @@ $user_id = $_SESSION['user_id'];
 $user_query = $conn->query("SELECT * FROM users WHERE id = $user_id");
 $user = $user_query->fetch_assoc();
 
-// Handle Actions (Approve/Reject Volunteer, Delete Camp, etc.)
+
 $success_msg = '';
 $error_msg = '';
 
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         $action = $_POST['action'];
         
-        // Volunteer Actions
+
         if ($action === 'approve_volunteer' || $action === 'reject_volunteer') {
             $vol_id = intval($_POST['volunteer_id']);
             $new_status = ($action === 'approve_volunteer') ? 'active' : 'inactive';
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Camp Actions
+
         if ($action === 'delete_camp') {
             $camp_id = intval($_POST['camp_id']);
             $delete = $conn->query("DELETE FROM camps WHERE id = $camp_id");
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Add Camp Action
+
         if ($action === 'add_camp') {
             $name = sanitize($_POST['camp_name']);
             $loc = sanitize($_POST['location']);
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error_msg = "Failed to add new camp.";
             }
         }
-        // Edit Camp Action
+
         if ($action === 'edit_camp') {
             $camp_id = intval($_POST['camp_id']);
             $name = sanitize($_POST['camp_name']);
@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Add Manager Action
+
         if ($action === 'add_manager') {
             $name = sanitize($_POST['full_name']);
             $email = sanitize($_POST['email']);
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $location = sanitize($_POST['location'] ?? '');
             $assigned_camp_id = isset($_POST['camp_id']) ? intval($_POST['camp_id']) : 0;
             
-            // Check if email exists
+
             $check = $conn->query("SELECT id FROM users WHERE email = '$email'");
             if ($check->num_rows > 0) {
                 $error_msg = "A user with this email already exists.";
@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Edit Manager Action
+
         if ($action === 'edit_manager') {
             $mgr_id = intval($_POST['manager_id']);
             $name = sanitize($_POST['full_name']);
@@ -129,10 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($conn->query($query)) {
                 if ($assigned_camp_id > 0) {
-                    // Update the selected camp to have this manager
+
                     $conn->query("UPDATE camps SET manager_id = $mgr_id WHERE id = $assigned_camp_id");
                 } elseif ($assigned_camp_id == -1) {
-                    // Unassign all camps from this manager
+
                     $conn->query("UPDATE camps SET manager_id = NULL WHERE manager_id = $mgr_id");
                 }
                 $success_msg = "Manager updated successfully.";
@@ -141,10 +141,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Delete Manager Action
+
         if ($action === 'delete_manager') {
             $mgr_id = intval($_POST['manager_id']);
-            // First unassign from camps
+
             $conn->query("UPDATE camps SET manager_id = NULL WHERE manager_id = $mgr_id");
             $delete = $conn->query("DELETE FROM users WHERE id = $mgr_id AND role = 'camp_manager'");
             if ($delete) {
@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Task Actions
+
         if ($action === 'add_task') {
             $name = sanitize($_POST['task_name']);
             $desc = sanitize($_POST['description']);
@@ -208,7 +208,7 @@ $unread_count = $unread['count'];
 
 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
-// Fetch Real Data
+
 $stats_query = [
     'active_camps' => $conn->query("SELECT COUNT(*) FROM camps WHERE status = 'active'")->fetch_row()[0],
     'total_volunteers' => $conn->query("SELECT COUNT(*) FROM users WHERE role = 'volunteer'")->fetch_row()[0],
@@ -223,34 +223,30 @@ $stats = [
     ['label' => 'Total Donations', 'value' => '৳' . number_format($stats_query['total_donations'] / 100000, 1) . 'L', 'meta' => 'Total funds raised', 'icon' => '💰', 'color' => '#f5f3ff'],
 ];
 
-// Fetch Camps
+
 $camps_res = $conn->query("SELECT c.*, u.full_name as manager_name FROM camps c LEFT JOIN users u ON c.manager_id = u.id");
 $camps = [];
 while($row = $camps_res->fetch_assoc()) {
     $camps[] = $row;
 }
 
-// Fetch Pending Volunteers
+
 $volunteers_res = $conn->query("SELECT * FROM users WHERE role = 'volunteer' AND status = 'active' ORDER BY created_at DESC");
-// Note: In a real app, 'status' would be 'pending' for new registrations. 
-// For now, let's show all volunteers but focus on those who might need approval if we had a pending status.
-// Let's assume we have a 'pending' status in the ENUM if we want real approval logic.
-// Based on schema: ENUM('active', 'inactive', 'blocked'). 
-// I'll use 'inactive' as 'pending' for this demo or just show all and allow toggling.
+
 $volunteers_res = $conn->query("SELECT * FROM users WHERE role = 'volunteer'");
 $volunteers = [];
 while($row = $volunteers_res->fetch_assoc()) {
     $volunteers[] = $row;
 }
 
-// Fetch Camp Managers for the "Add Camp" dropdown
+
 $managers_res = $conn->query("SELECT id, full_name FROM users WHERE role = 'camp_manager'");
 $managers = [];
 while($row = $managers_res->fetch_assoc()) {
     $managers[] = $row;
 }
 
-// Fetch Detailed Managers List for Managers Page
+
 $managers_list = [];
 if ($page === 'managers') {
     $managers_list_res = $conn->query("
@@ -266,7 +262,7 @@ if ($page === 'managers') {
     }
 }
 
-// Fetch Tasks Data
+
 $tasks_list = [];
 if ($page === 'tasks') {
     $tasks_res = $conn->query("
@@ -434,17 +430,7 @@ if ($page === 'tasks') {
                 </div>
                 <div class="topbar-actions">
 
-                    <?php if ($page === 'camps'): ?>
-                        <button type="button" class="btn-primary" onclick="openAddCampModal()">+ Add New Camp</button>
-                    <?php elseif ($page === 'managers'): ?>
-                        <button type="button" class="btn-primary" onclick="openAddManagerModal()">+ Add Manager</button>
-                    <?php elseif ($page === 'volunteers'): ?>
-                        <button type="button" class="btn-primary" onclick="alert('Invite functionality coming soon');">+ Invite Volunteer</button>
-                    <?php elseif ($page === 'donations'): ?>
-                        <button type="button" class="btn-primary" onclick="alert('Record new donation');">+ New Donation</button>
-                    <?php elseif ($page === 'reports'): ?>
-                        <button type="button" class="btn-primary" onclick="alert('Generating report');">Generate Report</button>
-                    <?php endif; ?>
+
                     <div class="notification">🔔 <?php if ($unread_count > 0): ?>
                         <span class="notification-badge"><?php echo $unread_count; ?></span>
                     <?php endif; ?></div>
@@ -840,7 +826,7 @@ if ($page === 'tasks') {
                                                 <?php
                                                     $sClass = 'inactive';
                                                     if($task['status'] === 'in_progress') $sClass = 'active';
-                                                    if($task['status'] === 'completed') $sClass = 'active'; // or define a success class
+                                                    if($task['status'] === 'completed') $sClass = 'active';
                                                     
                                                     $sStyle = "";
                                                     if($task['status'] === 'completed') $sStyle = "background:#ecfdf5; color:#059669;";
@@ -905,7 +891,7 @@ if ($page === 'tasks') {
         }
     </script>
 
-    <!-- Add Camp Modal -->
+
     <div id="addCampModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -1026,7 +1012,7 @@ if ($page === 'tasks') {
         }
     </script>
 
-    <!-- Add Manager Modal -->
+
     <div id="addManagerModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -1072,7 +1058,7 @@ if ($page === 'tasks') {
         </div>
     </div>
 
-    <!-- Edit Manager Modal -->
+
     <div id="editManagerModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -1119,7 +1105,7 @@ if ($page === 'tasks') {
             </form>
         </div>
     </div>
-    <!-- Edit Camp Modal -->
+
     <div id="editCampModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -1147,7 +1133,7 @@ if ($page === 'tasks') {
             </form>
         </div>
     </div>
-    <!-- Add Task Modal -->
+
     <div id="addTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
@@ -1202,7 +1188,7 @@ if ($page === 'tasks') {
         </div>
     </div>
 
-    <!-- Edit Task Modal -->
+
     <div id="editTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
