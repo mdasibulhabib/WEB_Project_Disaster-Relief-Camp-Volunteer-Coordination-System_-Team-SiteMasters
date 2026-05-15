@@ -434,6 +434,17 @@ if ($page === 'tasks') {
                 </div>
                 <div class="topbar-actions">
 
+                    <?php if ($page === 'camps'): ?>
+                        <button type="button" class="btn-primary" onclick="openAddCampModal()">+ Add New Camp</button>
+                    <?php elseif ($page === 'managers'): ?>
+                        <button type="button" class="btn-primary" onclick="openAddManagerModal()">+ Add Manager</button>
+                    <?php elseif ($page === 'volunteers'): ?>
+                        <button type="button" class="btn-primary" onclick="alert('Invite functionality coming soon');">+ Invite Volunteer</button>
+                    <?php elseif ($page === 'donations'): ?>
+                        <button type="button" class="btn-primary" onclick="alert('Record new donation');">+ New Donation</button>
+                    <?php elseif ($page === 'reports'): ?>
+                        <button type="button" class="btn-primary" onclick="alert('Generating report');">Generate Report</button>
+                    <?php endif; ?>
                     <div class="notification">🔔 <?php if ($unread_count > 0): ?>
                         <span class="notification-badge"><?php echo $unread_count; ?></span>
                     <?php endif; ?></div>
