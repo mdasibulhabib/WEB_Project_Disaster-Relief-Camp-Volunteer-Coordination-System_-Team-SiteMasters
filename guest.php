@@ -1,6 +1,5 @@
 <?php
-// Include your config file for database connection and session management
-// If you haven't created config.php yet, session_start() is required at minimum
+// config gile for main connection
 session_start();
 
 if (file_exists('config.php')) {
