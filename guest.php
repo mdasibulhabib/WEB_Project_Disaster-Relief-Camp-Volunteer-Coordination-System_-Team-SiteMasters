@@ -1,5 +1,5 @@
 <?php
-// config gile for main connection
+// config file for main connection
 session_start();
 
 if (file_exists('config.php')) {
