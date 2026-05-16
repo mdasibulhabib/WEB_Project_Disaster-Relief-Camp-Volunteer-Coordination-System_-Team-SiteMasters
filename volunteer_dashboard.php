@@ -25,6 +25,13 @@ $notifications_query = $conn->query("SELECT COUNT(*) as count FROM notifications
 $notifications = $notifications_query->fetch_assoc();
 $unread_count = $notifications['count'];
 
+// API Endpoint for Notifications
+if (isset($_GET['api']) && $_GET['api'] === 'check_notifications') {
+    header('Content-Type: application/json');
+    echo json_encode(['count' => $unread_count]);
+    exit();
+}
+
 // Get task statistics
 $task_stats = $conn->query("SELECT 
     COUNT(*) as total,
@@ -55,6 +62,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // Validate status
         $valid_statuses = ['pending', 'in_progress', 'completed'];
         if (in_array($new_status, $valid_statuses)) {
+            // Check if it was a distribution task before updating to 'completed'
+            if ($new_status === 'completed') {
+                $task_check = $conn->query("SELECT * FROM tasks WHERE id = $task_id AND assigned_to = $user_id");
+                $task_data = $task_check->fetch_assoc();
+                
+                if ($task_data && $task_data['task_type'] === 'distribution') {
+                    $recipient = 'Affected Resident'; 
+                    $item = $task_data['distribution_item'];
+                    $qty = $task_data['distribution_qty'];
+                    $camp_id_task = $task_data['camp_id'];
+                    
+                    $conn->query("INSERT INTO distributions (camp_id, recipient_name, items, quantity, distributed_by) VALUES ($camp_id_task, '$recipient', '$item', $qty, $user_id)");
+                }
+            }
+
             $completed_date_clause = ($new_status === 'completed') ? ", completed_date = NOW()" : "";
             $stmt = $conn->prepare("UPDATE tasks SET status = ?$completed_date_clause WHERE id = ? AND assigned_to = ?");
             $stmt->bind_param("sii", $new_status, $task_id, $user_id);
@@ -1103,6 +1125,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                         <span>📍 <?php echo htmlspecialchars($camp_name); ?></span>
                                         <span class="priority-badge priority-<?php echo strtolower($task['priority']); ?>"><?php echo strtoupper($task['priority']); ?></span>
                                     </div>
+                                    <?php if ($task['task_type'] === 'distribution'): ?>
+                                        <div style="margin-top: 0.8rem; padding: 0.5rem; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                                            <p style="font-size: 0.75rem; font-weight: 700; color: #1e40af; margin-bottom: 2px;">📦 DISTRIBUTION TASK</p>
+                                            <p style="font-size: 0.85rem; color: #334155;"><?php echo htmlspecialchars($task['distribution_item']); ?> (<?php echo $task['distribution_qty']; ?>)</p>
+                                        </div>
+                                    <?php endif; ?>
                                     <div style="margin-top: 1rem; font-size: 0.8rem; color: #3b82f6; font-weight: 600;">
                                         Manage in "My Tasks" section
                                     </div>
@@ -1735,6 +1763,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         </div>
     </div>
 
+    <script>
+        // Real-time-ish check for new tasks/notifications
+        let lastNotificationCount = <?php echo $unread_count; ?>;
+        setInterval(() => {
+            fetch('volunteer_dashboard.php?api=check_notifications')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.count > lastNotificationCount) {
+                        const bell = document.querySelector('.notification-badge');
+                        if (bell) {
+                            bell.innerText = data.count;
+                            bell.style.display = 'flex';
+                        } else {
+                            const bellIcon = document.querySelector('.notification-bell');
+                            if (bellIcon) {
+                                bellIcon.innerHTML += `<span class="notification-badge">${data.count}</span>`;
+                            }
+                        }
+                        lastNotificationCount = data.count;
+                        
+                        if (window.Notification && Notification.permission === "granted") {
+                            new Notification("New Task Assigned", { body: "You have received a new assignment from the Camp Manager." });
+                        }
+                    }
+                });
+        }, 5000);
+
+        if (window.Notification && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+
+        function toggleProfileMenu() {
+            const menu = document.getElementById('volProfileMenu');
+            if (menu) menu.classList.toggle('show');
+        }
+    </script>
 </body>
 </html>
 <?php
