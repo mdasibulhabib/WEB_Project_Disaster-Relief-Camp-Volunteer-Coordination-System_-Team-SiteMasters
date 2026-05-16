@@ -22,8 +22,9 @@ $tables = array(
         profile_image VARCHAR(255),
         location VARCHAR(255),
         skills TEXT,
+        availability VARCHAR(100),
         status ENUM('active', 'inactive', 'blocked') DEFAULT 'active',
-        last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        last_login TIMESTAMP NULL DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )",
@@ -86,8 +87,8 @@ $tables = array(
         id INT PRIMARY KEY AUTO_INCREMENT,
         camp_id INT,
         recipient_name VARCHAR(255) NOT NULL,
-        items VARCHAR(255) NOT NULL,
-        quantity FLOAT DEFAULT 1,
+        items TEXT NOT NULL,
+        quantity FLOAT DEFAULT 1.0,
         distributed_by INT,
         distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (camp_id) REFERENCES camps(id),
@@ -179,14 +180,17 @@ $tables = array(
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (camp_id) REFERENCES camps(id)
     )",
+    // Inventory Table
     "CREATE TABLE IF NOT EXISTS inventory (
         id INT PRIMARY KEY AUTO_INCREMENT,
         camp_id INT,
         item_name VARCHAR(255) NOT NULL,
         category VARCHAR(100),
         quantity DECIMAL(10, 2) DEFAULT 0.00,
-        unit VARCHAR(50),
+        min_threshold FLOAT DEFAULT 50.0,
+        unit VARCHAR(50) DEFAULT 'units',
         status ENUM('In Stock', 'Limited', 'Out of Stock') DEFAULT 'In Stock',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (camp_id) REFERENCES camps(id)
     )",
@@ -200,6 +204,46 @@ $tables = array(
         location VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
+    )",
+
+    // Affected Persons Table
+    "CREATE TABLE IF NOT EXISTS affected_persons (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        full_name VARCHAR(255) NOT NULL,
+        location VARCHAR(255) NOT NULL,
+        family_members INT NOT NULL DEFAULT 1,
+        needs TEXT,
+        access_key VARCHAR(255) NOT NULL,
+        registration_status ENUM('pending', 'assigned', 'completed', 'rejected') DEFAULT 'pending',
+        camp_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (camp_id) REFERENCES camps(id) ON DELETE SET NULL
+    )",
+
+    // Affected Help Requests Table
+    "CREATE TABLE IF NOT EXISTS affected_help_requests (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        affected_id INT NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        urgency ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+        description TEXT,
+        contact VARCHAR(255),
+        status ENUM('pending', 'in_progress', 'resolved') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (affected_id) REFERENCES affected_persons(id)
+    )",
+
+    // Affected Messages Table
+    // Note: affected_register.php defines sender ENUM('affected','support')
+    // Both sender and is_from_admin columns included here for compatibility.
+    "CREATE TABLE IF NOT EXISTS affected_messages (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        affected_id INT NOT NULL,
+        sender ENUM('affected', 'support') DEFAULT 'affected',
+        message_text TEXT NOT NULL,
+        is_from_admin BOOLEAN DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (affected_id) REFERENCES affected_persons(id)
     )"
 );
 
