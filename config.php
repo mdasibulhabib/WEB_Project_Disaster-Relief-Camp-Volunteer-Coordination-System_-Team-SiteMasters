@@ -22,6 +22,20 @@ $conn->set_charset("utf8");
 // Optional: Set timezone
 date_default_timezone_set('Asia/Dhaka');
 
+// Ensure necessary columns exist (Simple Migration Logic)
+$conn->query("SET SESSION sql_mode = '';"); // Ensure compatibility
+$cols = $conn->query("SHOW COLUMNS FROM users LIKE 'last_login'");
+if ($cols->num_rows == 0) {
+    $conn->query("ALTER TABLE users ADD COLUMN last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER status");
+}
+
+$cols = $conn->query("SHOW COLUMNS FROM tasks LIKE 'task_type'");
+if ($cols->num_rows == 0) {
+    $conn->query("ALTER TABLE tasks ADD COLUMN task_type ENUM('standard', 'distribution') DEFAULT 'standard' AFTER description");
+    $conn->query("ALTER TABLE tasks ADD COLUMN distribution_item VARCHAR(255) AFTER task_type");
+    $conn->query("ALTER TABLE tasks ADD COLUMN distribution_qty FLOAT DEFAULT 0 AFTER distribution_item");
+}
+
 // Error reporting (disable in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);

@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'];
                 
+                // Update last login
+                $conn->query("UPDATE users SET last_login = NOW() WHERE id = " . $user['id']);
+                
                 // Redirect based on role
                 if ($user['role'] === 'admin') {
                     redirect('admin_dashboard.php');
