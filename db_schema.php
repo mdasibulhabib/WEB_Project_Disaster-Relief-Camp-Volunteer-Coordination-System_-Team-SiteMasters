@@ -261,13 +261,13 @@ $sampleData = array(
     // Sample users
     "INSERT IGNORE INTO users (id, role, full_name, email, phone, password, location) VALUES
     (1, 'admin', 'Admin User', 'admin@disasterrelief.bd', '+8801234567890', '" . password_hash('admin123', PASSWORD_BCRYPT) . "', 'Dhaka'),
-    (2, 'camp_manager', 'Rajesh Kumar', 'rajesh@disasterrelief.bd', '+8801712345678', '" . password_hash('manager123', PASSWORD_BCRYPT) . "', 'Mumbai'),
-    (3, 'volunteer', 'Rahul Singh', 'rahul@disasterrelief.bd', '+8801987654321', '" . password_hash('volunteer123', PASSWORD_BCRYPT) . "', 'Camp Alpha'),
-    (4, 'donor', 'John Doe', 'john@example.com', '+8801111111111', '" . password_hash('donor123', PASSWORD_BCRYPT) . "', 'Dhaka')",
+    (2, 'camp_manager', 'Karim Ahmed', 'karim@disasterrelief.bd', '+8801712345678', '" . password_hash('manager123', PASSWORD_BCRYPT) . "', 'Sylhet'),
+    (3, 'volunteer', 'Tanvir Ahmed', 'tanvir@disasterrelief.bd', '+8801987654321', '" . password_hash('volunteer123', PASSWORD_BCRYPT) . "', 'Camp Alpha'),
+    (4, 'donor', 'Hasan Mahmud', 'hasan@example.com', '+8801111111111', '" . password_hash('donor123', PASSWORD_BCRYPT) . "', 'Dhaka')",
 
     // Sample camps
     "INSERT IGNORE INTO camps (id, camp_name, location, manager_id, capacity, current_occupancy, status) VALUES
-    (1, 'Camp Alpha', 'Mumbai', 2, 500, 350, 'active'),
+    (1, 'Camp Alpha', 'Sylhet', 2, 500, 350, 'active'),
     (2, 'Camp Beta', 'Dhaka', 2, 300, 250, 'active')",
 
     // Sample campaigns

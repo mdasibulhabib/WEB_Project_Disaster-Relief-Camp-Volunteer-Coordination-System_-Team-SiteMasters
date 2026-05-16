@@ -1518,7 +1518,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <!-- Chat List -->
                         <div class="chat-list">
                             <div class="chat-item active">
-                                <div class="chat-item-name">Rajesh Kumar</div>
+                                <div class="chat-item-name">Karim Ahmed</div>
                                 <div class="chat-item-status">🟢 Online - Camp Manager</div>
                             </div>
                         </div>
@@ -1528,7 +1528,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <!-- Messages -->
                             <div class="chat-messages">
                                 <div class="message">
-                                    <div class="message-avatar">RK</div>
+                                    <div class="message-avatar">KA</div>
                                     <div class="message-content">
                                         <div class="message-text">Great work on today's distribution!</div>
                                         <div class="message-time">11:00 AM</div>
@@ -1536,7 +1536,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </div>
 
                                 <div class="message">
-                                    <div class="message-avatar">RK</div>
+                                    <div class="message-avatar">KA</div>
                                     <div class="message-content">
                                         <div class="message-text">I have a new task for you</div>
                                         <div class="message-time">11:10 AM</div>
