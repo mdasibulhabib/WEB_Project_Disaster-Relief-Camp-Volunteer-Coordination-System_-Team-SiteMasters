@@ -23,6 +23,7 @@ $tables = array(
         location VARCHAR(255),
         skills TEXT,
         status ENUM('active', 'inactive', 'blocked') DEFAULT 'active',
+        last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )",
@@ -67,13 +68,30 @@ $tables = array(
         assigned_to INT,
         assigned_by INT,
         priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
+        task_type ENUM('standard', 'distribution') DEFAULT 'standard',
+        distribution_item VARCHAR(255),
+        distribution_qty FLOAT DEFAULT 0,
         status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
         due_date DATETIME,
         completed_date DATETIME,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (camp_id) REFERENCES camps(id),
         FOREIGN KEY (assigned_to) REFERENCES users(id),
         FOREIGN KEY (assigned_by) REFERENCES users(id)
+    )",
+
+    // Distributions Table
+    "CREATE TABLE IF NOT EXISTS distributions (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        camp_id INT,
+        recipient_name VARCHAR(255) NOT NULL,
+        items VARCHAR(255) NOT NULL,
+        quantity FLOAT DEFAULT 1,
+        distributed_by INT,
+        distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (camp_id) REFERENCES camps(id),
+        FOREIGN KEY (distributed_by) REFERENCES users(id)
     )",
 
     // Donations Table

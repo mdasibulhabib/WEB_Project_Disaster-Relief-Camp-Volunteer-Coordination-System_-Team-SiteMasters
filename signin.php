@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'];
                 
+                // Update last login
+                $conn->query("UPDATE users SET last_login = NOW() WHERE id = " . $user['id']);
+                
                 // Redirect based on role
                 if ($user['role'] === 'admin') {
                     redirect('admin_dashboard.php');
@@ -426,6 +429,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- Sign In Button -->
                     <button type="submit" class="btn-signin">Sign In</button>
+
+                    <!-- Affected Login Button -->
+                    <a href="affected_login.php" style="text-decoration: none;">
+                        <button type="button" class="btn-signin" style="background-color: #f5f5f5; color: #1a1a1a; border: 1px solid #ddd; margin-top: 1rem;">Affected Person Login</button>
+                    </a>
 
                     <!-- Sign Up Link -->
                     <div class="signup-link">
