@@ -244,8 +244,21 @@ $sampleData = array(
     "INSERT IGNORE INTO schedules (id, user_id, day_of_week, start_time, end_time, location) VALUES
     (1, 3, 'Monday', '09:00:00', '17:00:00', 'Central Relief Camp'),
     (2, 3, 'Wednesday', '13:00:00', '21:00:00', 'Central Relief Camp'),
-    (3, 3, 'Friday', '09:00:00', '17:00:00', 'North Emergency Shelter')"
+    (3, 3, 'Friday', '09:00:00', '17:00:00', 'North Emergency Shelter')",
+    
+    // Sample Volunteer Assignments
+    "INSERT IGNORE INTO volunteer_assignments (volunteer_id, camp_id, assignment_date, status) VALUES
+    (3, 1, '2026-01-01 09:00:00', 'active')",
+
+    // Sample Inventory
+    "INSERT IGNORE INTO inventory (camp_id, item_name, category, quantity, unit, status) VALUES
+    (1, 'Food Packets', 'Food', 500, 'packets', 'In Stock'),
+    (1, 'Water Bottles', 'Water', 1000, 'bottles', 'In Stock'),
+    (1, 'Medical Kits', 'Medical', 50, 'kits', 'In Stock'),
+    (1, 'Blankets', 'Supplies', 200, 'pieces', 'In Stock'),
+    (2, 'Rice Bags', 'Food', 100, 'bags', 'In Stock')"
 );
+
 
 // Insert sample data
 foreach ($sampleData as $query) {
