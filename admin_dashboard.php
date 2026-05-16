@@ -214,7 +214,9 @@ $stats_query = [
     'total_volunteers' => $conn->query("SELECT COUNT(*) FROM users WHERE role = 'volunteer'")->fetch_row()[0],
     'affected_people' => $conn->query("SELECT SUM(current_occupancy) FROM camps")->fetch_row()[0] ?? 0,
     'total_donations' => $conn->query("SELECT SUM(amount) FROM donations WHERE status = 'completed'")->fetch_row()[0] ?? 0,
+    'alerts_count' => $conn->query("SELECT COUNT(*) FROM emergency_reports WHERE status IN ('pending', 'in_progress')")->fetch_row()[0] ?? 0,
 ];
+
 
 $stats = [
     ['label' => 'Active Camps', 'value' => $stats_query['active_camps'], 'meta' => 'Real-time data', 'icon' => '⛺', 'color' => '#eff6ff'],
@@ -231,13 +233,15 @@ while($row = $camps_res->fetch_assoc()) {
 }
 
 
-$volunteers_res = $conn->query("SELECT * FROM users WHERE role = 'volunteer' AND status = 'active' ORDER BY created_at DESC");
-
-$volunteers_res = $conn->query("SELECT * FROM users WHERE role = 'volunteer'");
+// Fetch all volunteers for the volunteer list page
+$volunteers_res = $conn->query("SELECT * FROM users WHERE role = 'volunteer' ORDER BY created_at DESC");
 $volunteers = [];
-while($row = $volunteers_res->fetch_assoc()) {
-    $volunteers[] = $row;
+if ($volunteers_res) {
+    while($row = $volunteers_res->fetch_assoc()) {
+        $volunteers[] = $row;
+    }
 }
+
 
 
 $managers_res = $conn->query("SELECT id, full_name FROM users WHERE role = 'camp_manager'");
@@ -276,7 +280,24 @@ if ($page === 'tasks') {
         $tasks_list[] = $row;
     }
 }
+
+$donations_list = [];
+if ($page === 'donations') {
+    $donations_res = $conn->query("
+        SELECT d.*, u.full_name as donor_name, c.campaign_name 
+        FROM donations d 
+        LEFT JOIN users u ON d.donor_id = u.id 
+        LEFT JOIN campaigns c ON d.campaign_id = c.id 
+        ORDER BY d.created_at DESC
+    ");
+    if ($donations_res) {
+        while($row = $donations_res->fetch_assoc()) {
+            $donations_list[] = $row;
+        }
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -412,11 +433,11 @@ if ($page === 'tasks') {
                 <li class="menu-item"><a href="admin_dashboard.php?page=dashboard" class="menu-link <?php echo $page === 'dashboard' ? 'active' : ''; ?>"><span class="menu-icon">📊</span>Dashboard</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=managers" class="menu-link <?php echo $page === 'managers' ? 'active' : ''; ?>"><span class="menu-icon">👤</span>Camp Managers</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=camps" class="menu-link <?php echo $page === 'camps' ? 'active' : ''; ?>"><span class="menu-icon">⛺</span>Camps</a></li>
-                <li class="menu-item"><a href="admin_dashboard.php?page=volunteers" class="menu-link <?php echo $page === 'volunteers' ? 'active' : ''; ?>"><span class="menu-icon">🧑‍🤝‍🧑</span>Volunteers<span class="menu-badge">6</span></a></li>
+                <li class="menu-item"><a href="admin_dashboard.php?page=volunteers" class="menu-link <?php echo $page === 'volunteers' ? 'active' : ''; ?>"><span class="menu-icon">🧑‍🤝‍🧑</span>Volunteers<span class="menu-badge"><?php echo $stats_query['total_volunteers']; ?></span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=donations" class="menu-link <?php echo $page === 'donations' ? 'active' : ''; ?>"><span class="menu-icon">💵</span>Donations</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=tasks" class="menu-link <?php echo $page === 'tasks' ? 'active' : ''; ?>"><span class="menu-icon">📋</span>Task Assignment</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=inventory" class="menu-link <?php echo $page === 'inventory' ? 'active' : ''; ?>"><span class="menu-icon">📦</span>Inventory</a></li>
-                <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge">3</span></a></li>
+                <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge"><?php echo $stats_query['alerts_count']; ?></span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=reports" class="menu-link <?php echo $page === 'reports' ? 'active' : ''; ?>"><span class="menu-icon">📈</span>Reports</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=settings" class="menu-link <?php echo $page === 'settings' ? 'active' : ''; ?>"><span class="menu-icon">⚙️</span>Settings</a></li>
             </ul>
@@ -713,14 +734,98 @@ if ($page === 'tasks') {
                 <?php elseif ($page === 'donations'): ?>
                     <div class="page-header">
                         <div>
-                            <div class="page-title">Donations</div>
-                            <div class="page-subtitle">Track contributions and funding status</div>
+                            <div class="page-title">Donation Management</div>
+                            <div class="page-subtitle">Track and verify all contributions from donors</div>
                         </div>
-                        <button type="button" class="btn-primary" onclick="alert('Record new donation');">Record Donation</button>
+                        <div style="display:flex; gap:0.75rem;">
+                            <button type="button" class="btn-secondary" onclick="window.print()">Export Report</button>
+                            <button type="button" class="btn-primary" onclick="alert('Manual record entry coming soon')">+ Record Donation</button>
+                        </div>
                     </div>
+
+                    <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+                        <div class="stat-card" style="background: #f5f3ff;">
+                            <div class="stat-text">
+                                <span class="stat-label">Total Raised</span>
+                                <span class="stat-value">৳<?php echo number_format($stats_query['total_donations']); ?></span>
+                                <span class="stat-meta" style="color:#7c3aed;">Lifetime contributions</span>
+                            </div>
+                            <div class="stat-icon">💰</div>
+                        </div>
+                        <div class="stat-card" style="background: #ecfdf5;">
+                            <div class="stat-text">
+                                <span class="stat-label">Total Donors</span>
+                                <span class="stat-value"><?php echo count(array_unique(array_column($donations_list, 'donor_id'))); ?></span>
+                                <span class="stat-meta">Unique supporters</span>
+                            </div>
+                            <div class="stat-icon">🤝</div>
+                        </div>
+                        <div class="stat-card" style="background: #fff7ed;">
+                            <div class="stat-text">
+                                <span class="stat-label">Recent Donations</span>
+                                <span class="stat-value"><?php echo count(array_filter($donations_list, function($d) { return strtotime($d['created_at']) > strtotime('-7 days'); })); ?></span>
+                                <span class="stat-meta">In the last 7 days</span>
+                            </div>
+                            <div class="stat-icon">⚡</div>
+                        </div>
+                    </div>
+
+                    <div class="search-box" style="margin-bottom: 1.5rem;">
+                        <input id="donationSearch" type="text" placeholder="Search by donor name, campaign, or transaction ID...">
+                    </div>
+
                     <div class="panel">
-                        <p>Donation analytics and recent contributions are displayed here.</p>
+                        <div class="panel-heading">
+                            <h3>Donation History</h3>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="table" id="donationsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Donor</th>
+                                        <th>Campaign</th>
+                                        <th>Amount</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Transaction ID</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($donations_list)): ?>
+                                        <tr><td colspan="8" style="text-align:center; padding:3rem; color:#6b7280;">No donations recorded yet.</td></tr>
+                                    <?php endif; ?>
+                                    <?php foreach ($donations_list as $donation): ?>
+                                        <tr class="donation-row">
+                                            <td>
+                                                <div style="display:flex; align-items:center; gap:0.75rem;">
+                                                    <div class="profile-avatar" style="width:32px; height:32px; font-size:0.8rem; background: #e0f2fe; color: #0369a1;">
+                                                        <?php echo strtoupper(substr($donation['donor_name'] ?? 'U', 0, 1)); ?>
+                                                    </div>
+                                                    <span style="font-weight:600;"><?php echo htmlspecialchars($donation['donor_name'] ?? 'Guest Donor'); ?></span>
+                                                </div>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($donation['campaign_name'] ?? 'General Fund'); ?></td>
+                                            <td style="font-weight:700; color:#111827;">৳<?php echo number_format($donation['amount'], 2); ?></td>
+                                            <td><span class="badge" style="background:#f3f4f6; color:#4b5563;"><?php echo ucfirst($donation['donation_type']); ?></span></td>
+                                            <td>
+                                                <span class="badge <?php echo $donation['status'] === 'completed' ? 'active' : ($donation['status'] === 'pending' ? 'inactive' : 'btn-danger'); ?>" style="<?php echo $donation['status'] === 'failed' ? 'background:#fef2f2; color:#ef4444;' : ''; ?>">
+                                                    <?php echo ucfirst($donation['status']); ?>
+                                                </span>
+                                            </td>
+                                            <td><code style="font-size:0.85rem; color:#6b7280;"><?php echo htmlspecialchars($donation['transaction_id'] ?: 'N/A'); ?></code></td>
+                                            <td><?php echo date('M d, Y', strtotime($donation['created_at'])); ?></td>
+                                            <td class="table-actions">
+                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="alert('Viewing details for <?php echo $donation['transaction_id']; ?>')">View</button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+
                 <?php elseif ($page === 'inventory'): ?>
                     <div class="page-header">
                         <div>
@@ -993,6 +1098,13 @@ if ($page === 'tasks') {
         document.getElementById('taskSearch')?.addEventListener('input', function() {
             const filter = this.value.toLowerCase();
             document.querySelectorAll('#tasksTable tbody tr').forEach(function(row) {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+            });
+        });
+
+        document.getElementById('donationSearch')?.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            document.querySelectorAll('#donationsTable tbody tr').forEach(function(row) {
                 row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
             });
         });
