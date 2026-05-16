@@ -296,7 +296,23 @@ if ($page === 'donations') {
         }
     }
 }
+
+$inventory_list = [];
+if ($page === 'inventory') {
+    $inventory_res = $conn->query("
+        SELECT i.*, c.camp_name 
+        FROM inventory i 
+        LEFT JOIN camps c ON i.camp_id = c.id 
+        ORDER BY i.item_name ASC
+    ");
+    if ($inventory_res) {
+        while($row = $inventory_res->fetch_assoc()) {
+            $inventory_list[] = $row;
+        }
+    }
+}
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -829,12 +845,102 @@ if ($page === 'donations') {
                 <?php elseif ($page === 'inventory'): ?>
                     <div class="page-header">
                         <div>
-                            <div class="page-title">Inventory</div>
-                            <div class="page-subtitle">Manage supplies across camps</div>
+                            <div class="page-title">Inventory Management</div>
+                            <div class="page-subtitle">Track and manage supplies across all relief camps</div>
                         </div>
-                        <button type="button" class="btn-primary" onclick="alert('Add inventory item');">Add Item</button>
+                        <div style="display:flex; gap:0.75rem;">
+                            <button type="button" class="btn-secondary" onclick="window.print()">Export Inventory</button>
+                            <button type="button" class="btn-primary" onclick="alert('Add item functionality coming soon')">+ Add New Item</button>
+                        </div>
                     </div>
-                    <div class="panel"><p>Inventory levels, stock alerts, and restocking actions can be managed here.</p></div>
+
+                    <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+                        <div class="stat-card" style="background: #eef2ff;">
+                            <div class="stat-text">
+                                <span class="stat-label">Total Items</span>
+                                <span class="stat-value"><?php echo count($inventory_list); ?></span>
+                                <span class="stat-meta">Across all categories</span>
+                            </div>
+                            <div class="stat-icon">📦</div>
+                        </div>
+                        <div class="stat-card" style="background: #fff7ed;">
+                            <div class="stat-text">
+                                <span class="stat-label">Low Stock Alerts</span>
+                                <span class="stat-value"><?php echo count(array_filter($inventory_list, function($i) { return $i['status'] === 'Limited'; })); ?></span>
+                                <span class="stat-meta">Items needing restock</span>
+                            </div>
+                            <div class="stat-icon">⚠️</div>
+                        </div>
+                        <div class="stat-card" style="background: #ecfdf5;">
+                            <div class="stat-text">
+                                <span class="stat-label">Stock Status</span>
+                                <span class="stat-value"><?php echo count(array_filter($inventory_list, function($i) { return $i['status'] === 'In Stock'; })); ?></span>
+                                <span class="stat-meta">Items fully available</span>
+                            </div>
+                            <div class="stat-icon">✅</div>
+                        </div>
+                    </div>
+
+                    <div class="search-box" style="margin-bottom: 1.5rem;">
+                        <input id="inventorySearch" type="text" placeholder="Search by item name, category or camp...">
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-heading">
+                            <h3>Supply Stock Levels</h3>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="table" id="inventoryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Item Name</th>
+                                        <th>Category</th>
+                                        <th>Camp Location</th>
+                                        <th>Quantity</th>
+                                        <th>Status</th>
+                                        <th>Last Updated</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($inventory_list)): ?>
+                                        <tr><td colspan="7" style="text-align:center; padding:3rem; color:#6b7280;">No inventory records found.</td></tr>
+                                    <?php endif; ?>
+                                    <?php foreach ($inventory_list as $item): ?>
+                                        <tr class="inventory-row">
+                                            <td>
+                                                <div style="font-weight:600; color:#111827;"><?php echo htmlspecialchars($item['item_name']); ?></div>
+                                            </td>
+                                            <td><span class="badge" style="background:#f3f4f6; color:#4b5563;"><?php echo htmlspecialchars($item['category']); ?></span></td>
+                                            <td><?php echo htmlspecialchars($item['camp_name'] ?: 'Central Warehouse'); ?></td>
+                                            <td>
+                                                <span style="font-weight:700; color:#111827;"><?php echo number_format($item['quantity'], 1); ?></span>
+                                                <span style="font-size:0.8rem; color:#6b7280;"><?php echo htmlspecialchars($item['unit']); ?></span>
+                                            </td>
+                                            <td>
+                                                <?php
+                                                    $sClass = 'inactive';
+                                                    if($item['status'] === 'In Stock') $sClass = 'active';
+                                                    
+                                                    $sStyle = "";
+                                                    if($item['status'] === 'Limited') $sStyle = "background:#fffbeb; color:#d97706;";
+                                                    if($item['status'] === 'Out of Stock') $sStyle = "background:#fef2f2; color:#ef4444;";
+                                                ?>
+                                                <span class="badge <?php echo $sClass; ?>" style="<?php echo $sStyle; ?>">
+                                                    <?php echo htmlspecialchars($item['status']); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo date('M d, Y', strtotime($item['updated_at'])); ?></td>
+                                            <td class="table-actions">
+                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="alert('Adjusting stock for <?php echo $item['item_name']; ?>')">Adjust</button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 <?php elseif ($page === 'alerts'): ?>
                     <div class="page-header">
                         <div>
@@ -1105,6 +1211,13 @@ if ($page === 'donations') {
         document.getElementById('donationSearch')?.addEventListener('input', function() {
             const filter = this.value.toLowerCase();
             document.querySelectorAll('#donationsTable tbody tr').forEach(function(row) {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+            });
+        });
+
+        document.getElementById('inventorySearch')?.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            document.querySelectorAll('#inventoryTable tbody tr').forEach(function(row) {
                 row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
             });
         });
