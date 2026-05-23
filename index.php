@@ -564,7 +564,7 @@
             </div>
             <div class="stat-card">
                 <div class="stat-icon">❤️</div>
-                <div class="stat-number">₹5 Cr+</div>
+                <div class="stat-number">৳5 Cr+</div>
                 <div class="stat-label">Donations Received</div>
             </div>
             <div class="stat-card">
@@ -590,8 +590,8 @@
 
                 <div class="campaign-progress">
                     <div class="progress-label">
-                        <span>₹45L</span>
-                        <span>of ₹1Cr</span>
+                        <span>৳45L</span>
+                        <span>of ৳1Cr</span>
                     </div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: 45%;"></div>
@@ -619,8 +619,8 @@
 
                 <div class="campaign-progress">
                     <div class="progress-label">
-                        <span>₹78L</span>
-                        <span>of ₹1.5Cr</span>
+                        <span>৳78L</span>
+                        <span>of ৳1.5Cr</span>
                     </div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: 52%;"></div>
@@ -647,8 +647,8 @@
 
                 <div class="campaign-progress">
                     <div class="progress-label">
-                        <span>₹132L</span>
-                        <span>of ₹175L</span>
+                        <span>৳132L</span>
+                        <span>of ৳175L</span>
                     </div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: 75%;"></div>

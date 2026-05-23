@@ -79,7 +79,7 @@ $campaigns_query = $conn->query("SELECT * FROM campaigns WHERE status = 'active'
 $my_donations_query = $conn->query("SELECT d.*, c.campaign_name FROM donations d LEFT JOIN campaigns c ON d.campaign_id = c.id WHERE d.donor_id = $user_id ORDER BY d.created_at DESC");
 
 function formatCurrency($amount) {
-    return '$' . number_format((float)$amount, 0, '.', ',');
+    return '৳' . number_format((float)$amount, 0, '.', ',');
 }
 ?>
 <!DOCTYPE html>
