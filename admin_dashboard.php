@@ -97,6 +97,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($action === 'edit_inventory') {
+            $inv_id = intval($_POST['inventory_id']);
+            $qty = floatval($_POST['quantity']);
+            $status = sanitize($_POST['status']);
+            $update = $conn->query("UPDATE inventory SET quantity = $qty, status = '$status', updated_at = NOW() WHERE id = $inv_id");
+            if ($update) {
+                $success_msg = "Inventory updated successfully.";
+            } else {
+                $error_msg = "Failed to update inventory.";
+            }
+        }
+
 
         if ($action === 'add_camp') {
             $name = sanitize($_POST['camp_name']);
@@ -250,6 +262,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->query("INSERT INTO messages (sender_id, receiver_id, message_text) VALUES ($user_id, $receiver_id, '$msg')");
                 header("Location: admin_dashboard.php?page=chat&user_id=$receiver_id");
                 exit();
+            }
+        }
+
+        // Grant/revoke chat power to affected persons
+        if ($action === 'grant_chat_power') {
+            $ap_id = intval($_POST['affected_id']);
+            $update = $conn->query("UPDATE affected_persons SET chat_power = 1 WHERE id = $ap_id");
+            if ($update) {
+                $success_msg = "Chat power granted to affected person.";
+            } else {
+                $error_msg = "Failed to grant chat power.";
+            }
+        }
+
+        if ($action === 'revoke_chat_power') {
+            $ap_id = intval($_POST['affected_id']);
+            $update = $conn->query("UPDATE affected_persons SET chat_power = 0 WHERE id = $ap_id");
+            if ($update) {
+                $success_msg = "Chat power revoked from affected person.";
+            } else {
+                $error_msg = "Failed to revoke chat power.";
             }
         }
 
@@ -593,7 +626,6 @@ if ($page === 'reports') {
                 <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge"><?php echo $stats_query['alerts_count']; ?></span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=chat" class="menu-link <?php echo $page === 'chat' ? 'active' : ''; ?>"><span class="menu-icon">💬</span>Support Chat<?php if($stats_query['unread_chat'] > 0): ?><span class="menu-badge" style="background: #ef4444;"><?php echo $stats_query['unread_chat']; ?></span><?php endif; ?></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=reports" class="menu-link <?php echo $page === 'reports' ? 'active' : ''; ?>"><span class="menu-icon">📈</span>Reports</a></li>
-                <li class="menu-item"><a href="admin_dashboard.php?page=settings" class="menu-link <?php echo $page === 'settings' ? 'active' : ''; ?>"><span class="menu-icon">⚙️</span>Settings</a></li>
             </ul>
             <div class="sidebar-footer">Admin console for managing camps, volunteers, donations, and alerts.</div>
         </aside>
@@ -623,7 +655,6 @@ if ($page === 'reports') {
                                 <p style="font-size: 0.75rem; color: #6b7280;"><?php echo htmlspecialchars($user['email']); ?></p>
                             </div>
                             <a href="admin_dashboard.php?page=profile" class="dropdown-item">👤 My Profile</a>
-                            <a href="admin_dashboard.php?page=settings" class="dropdown-item">⚙️ Settings</a>
                             <div style="border-top: 1px solid #f3f4f6;"></div>
                             <a href="logout.php" class="dropdown-item logout">🚪 Log Out</a>
                         </div>
@@ -847,7 +878,6 @@ if ($page === 'reports') {
                             <div class="page-title">Volunteers Management</div>
                             <div class="page-subtitle">Approve registrations and manage volunteers</div>
                         </div>
-                        <button type="button" class="btn-primary" onclick="alert('Invite functionality coming soon');">Invite Volunteer</button>
                     </div>
                     <div class="panel" style="margin-bottom: 1.5rem;">
                         <div class="page-header" style="padding:0; margin-bottom:1rem; gap:0.75rem;">
@@ -1117,7 +1147,7 @@ if ($page === 'reports') {
                                             </td>
                                             <td><?php echo date('M d, Y', strtotime($item['updated_at'])); ?></td>
                                             <td class="table-actions">
-                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="alert('Adjusting stock for <?php echo $item['item_name']; ?>')">Adjust</button>
+                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="openEditInventoryModal(<?php echo $item['id']; ?>, '<?php echo addslashes($item['item_name']); ?>', <?php echo $item['quantity']; ?>, '<?php echo addslashes($item['unit']); ?>', '<?php echo addslashes($item['status']); ?>')">Edit</button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -1282,19 +1312,6 @@ if ($page === 'reports') {
                             html2pdf().set(opt).from(element).save();
                         }
                     </script>
-                <?php elseif ($page === 'settings'): ?>
-                    <div class="page-header">
-                        <div>
-                            <div class="page-title">Settings</div>
-                            <div class="page-subtitle">Configure admin preferences and system behavior</div>
-                        </div>
-                    </div>
-                    <div class="panel" style="max-width:700px;">
-                        <div class="form-field"><label>Notification Preferences</label><select><option>Email & push</option><option>Email only</option><option>Push only</option></select></div>
-                        <div class="form-field"><label>Theme</label><select><option>Light</option><option>Dark</option></select></div>
-                        <div class="form-field"><label>System Status</label><input type="text" value="All systems operational" disabled></div>
-                        <button class="btn-secondary" type="button" onclick="alert('Settings saved');">Save Settings</button>
-                    </div>
                 <?php elseif ($page === 'tasks'): ?>
                     <div class="page-header">
                         <div>
@@ -1428,6 +1445,96 @@ if ($page === 'reports') {
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- ── Affected Person Chat Power Management ─────────── -->
+                        <?php
+                        $ap_list_res = $conn->query("
+                            SELECT ap.id, ap.full_name, ap.registration_status, ap.chat_power, ap.access_key,
+                                   c.camp_name
+                            FROM affected_persons ap
+                            LEFT JOIN camps c ON ap.camp_id = c.id
+                            ORDER BY ap.chat_power DESC, ap.full_name ASC
+                        ");
+                        $ap_list = [];
+                        if ($ap_list_res) {
+                            while ($row = $ap_list_res->fetch_assoc()) $ap_list[] = $row;
+                        }
+                        ?>
+                        <div class="panel" style="margin-top: 1.5rem; border-top: 3px solid #6366f1;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                                <div>
+                                    <h3 style="font-size:1.1rem; font-weight:700; color:#0f172a; margin:0;">Affected Person Chat Access</h3>
+                                    <p style="color:#6b7280; font-size:0.85rem; margin-top:4px;">Grant or revoke the ability for affected persons to chat directly with their camp manager.</p>
+                                </div>
+                                <span style="background:#ede9fe; color:#6d28d9; padding:4px 12px; border-radius:999px; font-size:0.8rem; font-weight:600;">
+                                    <?php echo count(array_filter($ap_list, fn($r) => $r['chat_power'])); ?> Enabled
+                                </span>
+                            </div>
+                            <?php if (!empty($ap_list)): ?>
+                            <div style="overflow-x:auto;">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Affected Person</th>
+                                            <th>Access Key</th>
+                                            <th>Assigned Camp</th>
+                                            <th>Status</th>
+                                            <th>Chat Power</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($ap_list as $ap): ?>
+                                        <tr>
+                                            <td>
+                                                <div style="display:flex; align-items:center; gap:0.6rem;">
+                                                    <div class="profile-avatar" style="width:30px; height:30px; font-size:0.7rem; background:<?php echo $ap['chat_power'] ? '#6366f1' : '#94a3b8'; ?>;">
+                                                        <?php echo strtoupper(substr($ap['full_name'], 0, 1)); ?>
+                                                     </div>
+                                                     <strong><?php echo htmlspecialchars($ap['full_name']); ?></strong>
+                                                 </div>
+                                            </td>
+                                            <td><code style="background: #ede9fe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #6d28d9;"><?php echo htmlspecialchars($ap['access_key']); ?></code></td>
+                                            <td><?php echo htmlspecialchars($ap['camp_name'] ?? '—'); ?></td>
+                                            <td>
+                                                <?php
+                                                $s = $ap['registration_status'];
+                                                $sc = $s === 'assigned' ? '#059669' : ($s === 'pending' ? '#d97706' : '#6b7280');
+                                                ?>
+                                                <span style="color:<?php echo $sc; ?>; font-size:0.85rem; font-weight:600; text-transform:capitalize;"><?php echo $s; ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if ($ap['chat_power']): ?>
+                                                    <span style="display:inline-flex; align-items:center; gap:5px; background:#ede9fe; color:#6d28d9; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:700;">
+                                                        ✅ Enabled
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span style="display:inline-flex; align-items:center; gap:5px; background:#f1f5f9; color:#94a3b8; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:600;">
+                                                        🔒 Disabled
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <form method="POST" style="display:inline;">
+                                                    <input type="hidden" name="affected_id" value="<?php echo $ap['id']; ?>">
+                                                    <?php if ($ap['chat_power']): ?>
+                                                        <input type="hidden" name="action" value="revoke_chat_power">
+                                                        <button type="submit" class="btn-danger" style="font-size:0.8rem; padding:6px 14px; border-radius:8px;" onclick="return confirm('Revoke chat power from <?php echo addslashes($ap['full_name']); ?>?')">Revoke</button>
+                                                    <?php else: ?>
+                                                        <input type="hidden" name="action" value="grant_chat_power">
+                                                        <button type="submit" class="btn-primary" style="font-size:0.8rem; padding:6px 14px; border-radius:8px; background:#6366f1; border-color:#6366f1;">Grant Chat</button>
+                                                    <?php endif; ?>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <?php else: ?>
+                                <p style="color:#6b7280; text-align:center; padding:2rem;">No affected persons registered in the system yet.</p>
+                            <?php endif; ?>
+                        </div>
                     <?php else: 
                         $target_user = $conn->query("SELECT * FROM users WHERE id = $chat_user_id")->fetch_assoc();
                         $conn->query("UPDATE messages SET is_read = 1 WHERE sender_id = $chat_user_id AND receiver_id = $user_id AND is_read = 0");
@@ -1476,7 +1583,6 @@ if ($page === 'reports') {
     </div>
     <div class="dropdown-menu" id="adminProfileMenu" style="position:fixed; top:70px; right:40px; display:none; background:white; border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 18px 60px rgba(15,23,42,0.12); width:220px; z-index:50;">
         <a href="admin_dashboard.php?page=profile" style="display:block; padding:0.9rem 1rem; color:#111827; text-decoration:none;">Profile</a>
-        <a href="admin_dashboard.php?page=settings" style="display:block; padding:0.9rem 1rem; color:#111827; text-decoration:none;">Settings</a>
         <a href="logout.php" style="display:block; padding:0.9rem 1rem; color:#dc2626; text-decoration:none;">Logout</a>
     </div>
     <script>
@@ -1881,6 +1987,59 @@ if ($page === 'reports') {
             </form>
         </div>
     </div>
+    <div id="editInventoryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
+        <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+            <div class="panel-heading">
+                <h3>Edit Inventory Item</h3>
+                <button type="button" onclick="closeEditInventoryModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="edit_inventory">
+                <input type="hidden" name="inventory_id" id="edit_inv_id">
+                <div class="form-field">
+                    <label>Item Name</label>
+                    <input type="text" id="edit_inv_name" disabled style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                </div>
+                <div class="form-field" style="display:flex; gap:1rem;">
+                    <div style="flex:1;">
+                        <label>Quantity</label>
+                        <input type="number" step="0.01" name="quantity" id="edit_inv_qty" required>
+                    </div>
+                    <div style="flex:1;">
+                        <label>Unit</label>
+                        <input type="text" id="edit_inv_unit" disabled style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label>Status</label>
+                    <select name="status" id="edit_inv_status" required>
+                        <option value="In Stock">In Stock</option>
+                        <option value="Limited">Limited</option>
+                        <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+                    <button type="button" class="btn-secondary" style="flex:1;" onclick="closeEditInventoryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="flex:1;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openEditInventoryModal(id, name, qty, unit, status) {
+            document.getElementById('edit_inv_id').value = id;
+            document.getElementById('edit_inv_name').value = name;
+            document.getElementById('edit_inv_qty').value = qty;
+            document.getElementById('edit_inv_unit').value = unit;
+            document.getElementById('edit_inv_status').value = status;
+            document.getElementById('editInventoryModal').style.display = 'grid';
+        }
+        function closeEditInventoryModal() {
+            document.getElementById('editInventoryModal').style.display = 'none';
+        }
+    </script>
+
     <div id="sendAnnouncementModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
