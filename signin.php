@@ -28,7 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Verify password
             if (password_verify($password, $user['password'])) {
-                // Login successful
+                if ($user['status'] !== 'active') {
+                    $error = 'Your account is pending approval or inactive.';
+                } else {
+                    // Login successful
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'];
@@ -47,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     redirect('donor_dashboard.php');
                 } else {
                     redirect('index.php');
+                }
                 }
             } else {
                 $error = 'Incorrect password';
@@ -284,6 +288,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-decoration: underline;
         }
 
+        .btn-back-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border: 1.5px solid #d0d5e8;
+            border-radius: 8px;
+            color: #667eea;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            background: #f4f6ff;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-back-home:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
         .error-message {
             background-color: #f8d7da;
             color: #721c24;
@@ -379,9 +405,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="form-section">
             <div class="form-container">
                 <!-- Header -->
-                <div class="form-header">
-                    <div class="logo-icon">🛡️</div>
-                    <h2>DisasterRelief</h2>
+                <div class="form-header" style="justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:0.8rem;">
+                        <div class="logo-icon">🛡️</div>
+                        <h2>DisasterRelief</h2>
+                    </div>
+                    <a href="index.php" class="btn-back-home">
+                        ← Home
+                    </a>
                 </div>
 
                 <!-- Form Title -->

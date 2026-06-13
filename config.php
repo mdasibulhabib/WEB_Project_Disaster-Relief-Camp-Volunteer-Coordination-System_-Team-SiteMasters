@@ -36,6 +36,18 @@ if ($cols->num_rows == 0) {
     $conn->query("ALTER TABLE tasks ADD COLUMN distribution_qty FLOAT DEFAULT 0 AFTER distribution_item");
 }
 
+//Add chat_power to affected_persons (allows affected persons to chat with camp manager)
+$ap_cols = $conn->query("SHOW COLUMNS FROM affected_persons LIKE 'chat_power'");
+if ($ap_cols && $ap_cols->num_rows == 0) {
+    $conn->query("ALTER TABLE affected_persons ADD COLUMN chat_power TINYINT(1) DEFAULT 0 AFTER camp_id");
+}
+
+//Add sender_label to affected_messages for camp manager identification
+$am_cols = $conn->query("SHOW COLUMNS FROM affected_messages LIKE 'sender_label'");
+if ($am_cols && $am_cols->num_rows == 0) {
+    $conn->query("ALTER TABLE affected_messages ADD COLUMN sender_label VARCHAR(100) DEFAULT NULL AFTER sender");
+}
+
 // Error reporting (disable in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);

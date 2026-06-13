@@ -90,6 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         $action = $_POST['action'];
         
+        if ($action === 'mark_notifications_read') {
+            $conn->query("UPDATE notifications SET is_read = 1 WHERE user_id = $user_id");
+            header("Location: camp_manager_dashboard.php?page=" . ($_GET['page'] ?? 'dashboard'));
+            exit();
+        }
+        
         if ($action === 'register_family') {
             $head = sanitize($_POST['head_name']);
             $members = intval($_POST['family_members']);
@@ -147,6 +153,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $insert = $conn->query("INSERT INTO inventory (camp_id, item_name, category, quantity, unit, status) VALUES ($camp_id, '$name', '$cat', $qty, '$unit', '$status')");
             if ($insert) { $success_msg = "Item added to inventory."; } 
             else { $error_msg = "Failed to add item."; }
+        }
+
+        if ($action === 'send_chat_message') {
+            $receiver_id = isset($_POST['receiver_id']) ? intval($_POST['receiver_id']) : 0;
+            if ($receiver_id === 0) {
+                $admin_q = $conn->query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+                $receiver_id = ($admin_q && $admin_q->num_rows > 0) ? $admin_q->fetch_assoc()['id'] : 1;
+            }
+            $msg = sanitize($_POST['message'] ?? '');
+            if ($msg && $receiver_id) {
+                $conn->query("INSERT INTO messages (sender_id, receiver_id, message_text) VALUES ($user_id, $receiver_id, '$msg')");
+                header("Location: camp_manager_dashboard.php?page=chat&user_id=$receiver_id");
+                exit();
+            }
+        }
+
+        // Send message to affected person (chat power must be enabled)
+        if ($action === 'send_affected_message') {
+            $ap_id = intval($_POST['affected_id']);
+            $msg = sanitize($_POST['message'] ?? '');
+            $manager_name = $conn->real_escape_string($user['full_name']);
+            if ($msg && $ap_id) {
+                // Verify this affected person has chat_power and is in this camp
+                $check = $conn->query("SELECT id FROM affected_persons WHERE id = $ap_id AND camp_id = $camp_id AND chat_power = 1");
+                if ($check && $check->num_rows > 0) {
+                    $conn->query("INSERT INTO affected_messages (affected_id, message_text, is_from_admin, sender_label) VALUES ($ap_id, '$msg', 1, '$manager_name')");
+                    header("Location: camp_manager_dashboard.php?page=chat&section=affected&affected_id=$ap_id");
+                    exit();
+                } else {
+                    $error_msg = "Cannot send message: person not found or chat not enabled.";
+                }
+            }
         }
 
         if ($action === 'create_task_from_request') {
@@ -263,6 +301,17 @@ $stats = [
 
 $unread_query = $conn->query("SELECT COUNT(*) AS count FROM notifications WHERE user_id = $user_id AND is_read = 0");
 $unread_count = $unread_query ? $unread_query->fetch_assoc()['count'] : 0;
+
+$unread_chat_query = $conn->query("SELECT COUNT(*) FROM messages WHERE receiver_id = $user_id AND is_read = 0");
+$unread_chat = ($unread_chat_query && $unread_chat_query->num_rows > 0) ? $unread_chat_query->fetch_row()[0] : 0;
+
+$all_notifications_query = $conn->query("SELECT * FROM notifications WHERE user_id = $user_id ORDER BY created_at DESC LIMIT 5");
+$all_notifications = [];
+if ($all_notifications_query) {
+    while ($n = $all_notifications_query->fetch_assoc()) {
+        $all_notifications[] = $n;
+    }
+}
 
 // Fetch Recent Data for Dashboard
 $chart_inventory_res = $conn->query("SELECT item_name, quantity FROM inventory WHERE camp_id = $camp_id ORDER BY quantity DESC LIMIT 5");
@@ -430,6 +479,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; backdrop-filter: blur(4px); }
         .modal.show { display: flex; }
         .modal-content { background: white; padding: 1.8rem; border-radius: var(--radius-lg); width: 90%; max-width: 480px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .cm-dropdown.show { display: block !important; }
 
 
         /* Supplies Specific Styles */
@@ -453,6 +503,143 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
         .task-pill { background: #f0fdf4; color: #16a34a; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid #dcfce7; }
 
         @media (max-width: 1024px) { .sidebar { width: 80px; } .brand-container, .menu-link span, .menu-badge { display: none; } .menu-link { justify-content: center; } }
+
+        /* Chat Interface Styles */
+        .chat-container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 1rem;
+            height: 500px;
+            background: white;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .chat-list {
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        .chat-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .chat-item:hover {
+            background: #f1f5f9;
+        }
+
+        .chat-item.active {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+        }
+
+        .chat-item-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #0f172a;
+        }
+
+        .chat-item-status {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .chat-window {
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: #f8fafc;
+        }
+
+        .message {
+            display: flex;
+            gap: 0.75rem;
+            max-width: 80%;
+        }
+
+        .message.sent {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: grid;
+            place-items: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .message-text {
+            background: white;
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            color: #0f172a;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-text {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .chat-input {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.75rem;
+            background: white;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: #f8fafc;
+        }
+
+        .chat-input input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -543,7 +730,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                     </div>
                     <div class="panel">
                         <div class="panel-header"><h3 class="panel-title">Assigned People</h3><button class="btn btn-outline btn-sm" onclick="location.href='?page=families'">View All</button></div>
-                        <div class="table-container"><table><thead><tr><th>Name</th><th>Members</th><th>Location</th><th>Needs</th><th>Date</th></tr></thead><tbody><?php foreach (array_slice($assigned_affected, 0, 5) as $f): ?><tr><td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td><td><span class="badge" style="background:#f1f5f9;"><?php echo $f['family_members']; ?></span></td><td><?php echo htmlspecialchars($f['location']); ?></td><td><?php echo htmlspecialchars(substr($f['needs'] ?? '', 0, 40)); ?>...</td><td style="color: #94a3b8;"><?php echo date('M d', strtotime($f['created_at'])); ?></td></tr><?php endforeach; ?></tbody></table></div>
+                        <div class="table-container"><table><thead><tr><th>Name</th><th>Access Key</th><th>Members</th><th>Location</th><th>Needs</th><th>Date</th></tr></thead><tbody><?php foreach (array_slice($assigned_affected, 0, 5) as $f): ?><tr><td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td><td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($f['access_key']); ?></code></td><td><span class="badge" style="background:#f1f5f9;"><?php echo $f['family_members']; ?></span></td><td><?php echo htmlspecialchars($f['location']); ?></td><td><?php echo htmlspecialchars(substr($f['needs'] ?? '', 0, 40)); ?>...</td><td style="color: #94a3b8;"><?php echo date('M d', strtotime($f['created_at'])); ?></td></tr><?php endforeach; ?></tbody></table></div>
                     </div>
 
                 <?php elseif ($page === 'overview'): ?>
@@ -645,6 +832,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 <thead>
                                     <tr>
                                         <th>Name</th>
+                                        <th>Access Key</th>
                                         <th>Family Members</th>
                                         <th>Location</th>
                                         <th>Requested Date</th>
@@ -655,6 +843,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                     <?php foreach ($pending_affected as $p): ?>
                                         <tr>
                                             <td><span style="font-weight: 600;"><?php echo htmlspecialchars($p['full_name']); ?></span></td>
+                                            <td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($p['access_key']); ?></code></td>
                                             <td><?php echo $p['family_members']; ?></td>
                                             <td><?php echo htmlspecialchars($p['location']); ?></td>
                                             <td><?php echo date('Y-m-d', strtotime($p['created_at'])); ?></td>
@@ -672,7 +861,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                         </div>
                     </div>
                     <?php endif; ?>
-
+ 
                     <div class="ap-table-panel">
                         <div class="ap-table-header">Assigned People & Families</div>
                         <div class="table-container">
@@ -680,6 +869,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 <thead>
                                     <tr>
                                         <th>Name</th>
+                                        <th>Access Key</th>
                                         <th>Family Members</th>
                                         <th>Location</th>
                                         <th>Needs</th>
@@ -689,11 +879,12 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 </thead>
                                 <tbody>
                                     <?php if (empty($assigned_affected)): ?>
-                                        <tr><td colspan="6" style="text-align:center; padding: 3rem; color: var(--text-muted);">No assigned residents yet.</td></tr>
+                                        <tr><td colspan="7" style="text-align:center; padding: 3rem; color: var(--text-muted);">No assigned residents yet.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($assigned_affected as $f): ?>
                                             <tr>
                                                 <td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td>
+                                                <td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($f['access_key']); ?></code></td>
                                                 <td><?php echo $f['family_members']; ?></td>
                                                 <td><?php echo htmlspecialchars($f['location']); ?></td>
                                                 <td><span style="color: var(--text-muted);"><?php echo htmlspecialchars($f['needs'] ?? 'N/A'); ?></span></td>
@@ -1434,6 +1625,12 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 </tbody>
                             </table>
                         </div>
+                    </div>                <?php elseif ($page === 'chat'): ?>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="font-size: 1.5rem; font-weight: 700;">Support &amp; Team Chat</h2>
+                        <div style="display: flex; gap: 10px;">
+                            <span class="badge" style="background: #eff6ff; color: #2563eb;">Direct Messages</span>
+                        </div>
                     </div>
 
                     <!-- Report Details Modal -->
@@ -1851,11 +2048,182 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                         <p class="text-muted">Chat functionality is under development and coming soon.</p>
                     </div>
 
-                <?php elseif ($page === 'settings'): ?>
-                    <div class="panel" style="padding: 4rem; text-align: center; border-style: dashed; background: transparent; opacity: 0.5;">
-                        <i data-lucide="settings" style="width: 48px; color: var(--text-muted); margin-bottom: 1rem;"></i>
-                        <h3>Settings</h3>
+                    <?php if ($chat_section === 'team'): ?>
+                    <div class="chat-container">
+                        <!-- Chat List -->
+                        <div class="chat-list">
+                            <?php if (!empty($contacts_list)): ?>
+                                <?php foreach ($contacts_list as $cu): ?>
+                                    <div class="chat-item <?php echo ($cu['id'] == $chat_user_id) ? 'active' : ''; ?>" onclick="location.href='camp_manager_dashboard.php?page=chat&section=team&user_id=<?php echo $cu['id']; ?>'">
+                                        <div class="chat-item-name"><?php echo htmlspecialchars($cu['full_name']); ?></div>
+                                        <div class="chat-item-status">
+                                            <?php echo ucfirst(str_replace('_', ' ', $cu['role'])); ?>
+                                            <?php if ($cu['unread_count'] > 0): ?>
+                                                <span style="background: #ef4444; color: white; padding: 1px 5px; border-radius: 999px; font-size: 0.65rem; font-weight: bold; margin-left: 5px; float: right;"><?php echo $cu['unread_count']; ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if ($cu['last_msg']): ?>
+                                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <?php echo htmlspecialchars($cu['last_msg']); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+                                    No contacts available.
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Chat Window -->
+                        <div class="chat-window">
+                            <?php if ($target_user): 
+                                // Mark messages as read
+                                $conn->query("UPDATE messages SET is_read = 1 WHERE sender_id = $chat_user_id AND receiver_id = $user_id AND is_read = 0");
+                                
+                                // Fetch messages
+                                $messages = $conn->query("SELECT * FROM messages WHERE (sender_id = $user_id AND receiver_id = $chat_user_id) OR (sender_id = $chat_user_id AND receiver_id = $user_id) ORDER BY created_at ASC");
+                            ?>
+                                <div style="padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fff;">
+                                    <div>
+                                        <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;"><?php echo htmlspecialchars($target_user['full_name']); ?></h3>
+                                        <span class="badge" style="font-size: 0.7rem; padding: 2px 8px; background: #eff6ff; color: #2563eb; border-radius: 999px; font-weight: 600;"><?php echo ucfirst(str_replace('_', ' ', $target_user['role'])); ?></span>
+                                    </div>
+                                </div>
+
+                                <!-- Messages -->
+                                <div class="chat-messages" id="chatContainer">
+                                    <?php if ($messages && $messages->num_rows > 0): ?>
+                                        <?php while ($msg = $messages->fetch_assoc()): 
+                                            $is_me = ($msg['sender_id'] == $user_id);
+                                        ?>
+                                            <div class="message <?php echo $is_me ? 'sent' : ''; ?>">
+                                                <div class="message-content">
+                                                    <div class="message-text">
+                                                        <?php echo htmlspecialchars($msg['message_text']); ?>
+                                                    </div>
+                                                    <div class="message-time" style="<?php echo $is_me ? 'text-align: right;' : ''; ?>">
+                                                        <?php echo date('M d, h:i A', strtotime($msg['created_at'])); ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endwhile; ?>
+                                    <?php else: ?>
+                                        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-top: auto; margin-bottom: auto;">
+                                            No messages yet. Start the conversation.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Chat Input -->
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="action" value="send_chat_message">
+                                    <input type="hidden" name="receiver_id" value="<?php echo $chat_user_id; ?>">
+                                    <div class="chat-input">
+                                        <input type="text" name="message" placeholder="Type a message..." required autocomplete="off" autofocus>
+                                        <button type="submit" class="btn btn-primary" style="background: var(--primary); padding: 0.5rem 1.5rem; border-radius: 10px;">Send</button>
+                                    </div>
+                                </form>
+                            <?php else: ?>
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted);">
+                                    Select a user to start chatting.
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
+
+                    <?php else: // $chat_section === 'affected' ?>
+                    <div class="chat-container">
+                        <!-- Affected Persons List -->
+                        <div class="chat-list">
+                            <?php if (!empty($affected_contacts)): ?>
+                                <?php foreach ($affected_contacts as $ac): ?>
+                                    <div class="chat-item <?php echo ($ac['id'] == $chat_affected_id) ? 'active' : ''; ?>" 
+                                         onclick="location.href='camp_manager_dashboard.php?page=chat&section=affected&affected_id=<?php echo $ac['id']; ?>'">
+                                        <div class="chat-item-name"><?php echo htmlspecialchars($ac['full_name']); ?></div>
+                                        <div class="chat-item-status" style="color:#8b5cf6;">
+                                            🤝 Affected Person
+                                        </div>
+                                        <?php if ($ac['last_msg']): ?>
+                                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <?php echo htmlspecialchars($ac['last_msg']); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+                                    <div style="font-size:2rem; margin-bottom:0.5rem;">🔒</div>
+                                    No affected persons have been granted chat access yet.<br>
+                                    <small>Ask admin to enable chat access.</small>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Affected Person Chat Window -->
+                        <div class="chat-window">
+                            <?php if ($target_affected): ?>
+                                <div style="padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fdf4ff;">
+                                    <div>
+                                        <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;"><?php echo htmlspecialchars($target_affected['full_name']); ?></h3>
+                                        <span style="font-size: 0.7rem; padding: 2px 8px; background: #ede9fe; color: #6d28d9; border-radius: 999px; font-weight: 600;">🤝 Affected Person · Chat Enabled</span>
+                                    </div>
+                                </div>
+
+                                <!-- Messages from affected_messages table -->
+                                <div class="chat-messages" id="chatContainer">
+                                    <?php
+                                    $ap_msgs = $conn->prepare("SELECT * FROM affected_messages WHERE affected_id = ? ORDER BY created_at ASC");
+                                    $ap_msgs->bind_param("i", $chat_affected_id);
+                                    $ap_msgs->execute();
+                                    $ap_msgs_res = $ap_msgs->get_result();
+                                    if ($ap_msgs_res && $ap_msgs_res->num_rows > 0):
+                                        while ($am = $ap_msgs_res->fetch_assoc()):
+                                            $is_me = ($am['is_from_admin'] == 1); // manager/admin sent it
+                                    ?>
+                                        <div class="message <?php echo $is_me ? 'sent' : ''; ?>">
+                                            <div class="message-content">
+                                                <?php if (!$is_me): ?>
+                                                <div style="font-size:0.72rem; color:#8b5cf6; font-weight:600; margin-bottom:3px;"><?php echo htmlspecialchars($target_affected['full_name']); ?></div>
+                                                <?php elseif (!empty($am['sender_label'])): ?>
+                                                <div style="font-size:0.72rem; color:#6366f1; font-weight:600; margin-bottom:3px; text-align:right;"><?php echo htmlspecialchars($am['sender_label']); ?></div>
+                                                <?php endif; ?>
+                                                <div class="message-text"><?php echo htmlspecialchars($am['message_text']); ?></div>
+                                                <div class="message-time" style="<?php echo $is_me ? 'text-align: right;' : ''; ?>">
+                                                    <?php echo date('M d, h:i A', strtotime($am['created_at'])); ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; else: ?>
+                                        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-top: auto; margin-bottom: auto;">
+                                            No messages yet. Start the conversation with this person.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Chat Input -->
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="action" value="send_affected_message">
+                                    <input type="hidden" name="affected_id" value="<?php echo $chat_affected_id; ?>">
+                                    <div class="chat-input">
+                                        <input type="text" name="message" placeholder="Type a message to <?php echo htmlspecialchars($target_affected['full_name']); ?>..." required autocomplete="off" autofocus>
+                                        <button type="submit" class="btn btn-primary" style="background: #8b5cf6; padding: 0.5rem 1.5rem; border-radius: 10px;">Send</button>
+                                    </div>
+                                </form>
+                            <?php else: ?>
+                                <div style="display: flex; flex-direction:column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap:0.5rem;">
+                                    <div style="font-size:2.5rem;">🤝</div>
+                                    <p>Select an affected person to start chatting.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; // end chat_section check ?>
+                    <script>
+                        const chatContainer = document.getElementById('chatContainer');
+                        if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+                    </script>
 
                 <?php else: ?>
                     <div class="panel" style="padding: 4rem; text-align: center;">
