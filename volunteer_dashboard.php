@@ -23,7 +23,21 @@ $user = $user_query->fetch_assoc();
 // Get notifications count
 $notifications_query = $conn->query("SELECT COUNT(*) as count FROM notifications WHERE user_id = $user_id AND is_read = 0");
 $notifications = $notifications_query->fetch_assoc();
-$unread_count = $notifications['count'];
+$unread_count = $notifications['count'] ?? 0;
+
+$all_notifications_query = $conn->query("SELECT * FROM notifications WHERE user_id = $user_id ORDER BY created_at DESC LIMIT 5");
+$all_notifications = [];
+if ($all_notifications_query) {
+    while ($n = $all_notifications_query->fetch_assoc()) {
+        $all_notifications[] = $n;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'mark_notifications_read') {
+    $conn->query("UPDATE notifications SET is_read = 1 WHERE user_id = $user_id");
+    header("Location: volunteer_dashboard.php?page=" . ($_GET['page'] ?? 'dashboard'));
+    exit();
+}
 
 // API Endpoint for Notifications
 if (isset($_GET['api']) && $_GET['api'] === 'check_notifications') {
@@ -1078,11 +1092,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <h2 style="color: #1a1a1a;">DisasterRelief</h2>
                 </div>
                 <div class="header-right">
-                    <div class="notification-bell">
+                    <div class="notification-bell" onclick="document.getElementById('notifDropdownVol').classList.toggle('show')">
                         🔔
                         <?php if ($unread_count > 0): ?>
                             <span class="notification-badge"><?php echo $unread_count; ?></span>
                         <?php endif; ?>
+                        
+                        <div id="notifDropdownVol" class="dropdown-menu" style="width: 320px; right: -50px; padding: 0;">
+                            <div style="padding: 1.25rem; border-bottom: 1px solid #f3f4f6; background: #f8fafc; text-align: left;">
+                                <p style="font-weight: 700; font-size: 0.95rem; color: #0f172a; margin: 0;">Notifications</p>
+                            </div>
+                            <?php if (empty($all_notifications)): ?>
+                                <div style="padding: 1.5rem; text-align: center; color: #6b7280; font-size: 0.9rem;">No new notifications</div>
+                            <?php else: ?>
+                                <div style="max-height: 300px; overflow-y: auto; text-align: left;">
+                                    <?php foreach ($all_notifications as $notif): ?>
+                                        <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6; background: <?php echo $notif['is_read'] ? '#ffffff' : '#eff6ff'; ?>;">
+                                            <div style="font-weight: 700; font-size: 0.85rem; color: #111827;"><?php echo htmlspecialchars($notif['title']); ?></div>
+                                            <div style="font-size: 0.8rem; color: #4b5563; margin-top: 0.25rem;"><?php echo htmlspecialchars($notif['message']); ?></div>
+                                            <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 0.5rem;"><?php echo date('M d, H:i', strtotime($notif['created_at'])); ?></div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div style="padding: 0.75rem; text-align: center; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+                                    <form method="POST" style="margin: 0;">
+                                        <input type="hidden" name="action" value="mark_notifications_read">
+                                        <button type="submit" style="background: none; border: none; color: #2563eb; font-size: 0.85rem; font-weight: 700; cursor: pointer;">Mark all as read</button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="profile-dropdown">
                         <button type="button" class="dropdown-button" onclick="toggleProfileMenu()">

@@ -21,7 +21,21 @@ $user = $user_query->fetch_assoc();
 
 $notifications_query = $conn->query("SELECT COUNT(*) as count FROM notifications WHERE user_id = $user_id AND is_read = 0");
 $notifications = $notifications_query->fetch_assoc();
-$unread_count = $notifications['count'];
+$unread_count = $notifications['count'] ?? 0;
+
+$all_notifications_query = $conn->query("SELECT * FROM notifications WHERE user_id = $user_id ORDER BY created_at DESC LIMIT 5");
+$all_notifications = [];
+if ($all_notifications_query) {
+    while ($n = $all_notifications_query->fetch_assoc()) {
+        $all_notifications[] = $n;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'mark_notifications_read') {
+    $conn->query("UPDATE notifications SET is_read = 1 WHERE user_id = $user_id");
+    header("Location: donor_dashboard.php?page=" . ($_GET['page'] ?? 'dashboard'));
+    exit();
+}
 
 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 if (!in_array($page, ['dashboard', 'donate', 'history', 'campaigns', 'chat', 'profile', 'settings'])) {
@@ -44,13 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $page === 'donate') {
     } else {
         $transaction_id = 'DR-' . strtoupper(uniqid());
         $donation_type = in_array($donation_type, ['money', 'supplies', 'other']) ? $donation_type : 'money';
-        $status = 'completed';
+        $status = 'pending';
 
         $insert = $conn->query("INSERT INTO donations (donor_id, campaign_id, amount, donation_type, status, payment_method, transaction_id) VALUES ($user_id, $campaign_id, $amount, '$donation_type', '$status', '$payment_method', '$transaction_id')");
         if ($insert) {
-            // Update campaign raised amount
-            $conn->query("UPDATE campaigns SET raised_amount = raised_amount + $amount WHERE id = $campaign_id");
-            $success = 'Thank you! Your donation of ' . formatCurrency($amount) . ' has been recorded successfully.';
+            $success = 'Thank you! Your donation of ' . formatCurrency($amount) . ' has been recorded and is pending verification.';
         } else {
             $error = 'Unable to process the donation. Please try again.';
         }
@@ -211,9 +223,35 @@ function formatCurrency($amount) {
                     <div class="topbar-subtitle">Every contribution makes a real difference</div>
                 </div>
                 <div class="topbar-actions">
-                    <div class="notification">🔔 <?php if ($unread_count > 0): ?>
-                        <span class="notification-badge"><?php echo $unread_count; ?></span>
-                    <?php endif; ?></div>
+                    <div class="notification" style="position: relative;" onclick="document.getElementById('notifDropdown').classList.toggle('show')">
+                        🔔 <?php if ($unread_count > 0): ?>
+                            <span class="notification-badge"><?php echo $unread_count; ?></span>
+                        <?php endif; ?>
+                        <div id="notifDropdown" class="profile-dropdown" style="width: 320px; right: -50px; padding: 0;">
+                            <div class="dropdown-header">
+                                <p style="font-weight: 700; font-size: 0.95rem;">Notifications</p>
+                            </div>
+                            <?php if (empty($all_notifications)): ?>
+                                <div style="padding: 1.5rem; text-align: center; color: #6b7280; font-size: 0.9rem;">No new notifications</div>
+                            <?php else: ?>
+                                <div style="max-height: 300px; overflow-y: auto;">
+                                    <?php foreach ($all_notifications as $notif): ?>
+                                        <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6; background: <?php echo $notif['is_read'] ? '#ffffff' : '#eff6ff'; ?>;">
+                                            <div style="font-weight: 700; font-size: 0.85rem; color: #111827;"><?php echo htmlspecialchars($notif['title']); ?></div>
+                                            <div style="font-size: 0.8rem; color: #4b5563; margin-top: 0.25rem;"><?php echo htmlspecialchars($notif['message']); ?></div>
+                                            <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 0.5rem;"><?php echo date('M d, H:i', strtotime($notif['created_at'])); ?></div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div style="padding: 0.75rem; text-align: center; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+                                    <form method="POST" style="margin: 0;">
+                                        <input type="hidden" name="action" value="mark_notifications_read">
+                                        <button type="submit" style="background: none; border: none; color: #2563eb; font-size: 0.85rem; font-weight: 700; cursor: pointer;">Mark all as read</button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                     <div style="position: relative;">
                         <button class="profile-button" onclick="toggleProfileMenu()">
                             <div class="profile-avatar"><?php echo strtoupper(substr(trim($user['full_name']), 0, 1)); ?></div>
