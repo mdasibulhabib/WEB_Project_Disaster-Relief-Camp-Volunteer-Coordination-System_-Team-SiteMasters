@@ -211,6 +211,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($insert) { $success_msg = "Distribution recorded successfully."; }
             else { $error_msg = "Failed to record distribution: " . $conn->error; }
         }
+
+        if ($action === 'submit_report') {
+            $category = sanitize($_POST['report_category']);
+            $issue_type = sanitize($_POST['issue_type']);
+            $priority = sanitize($_POST['priority']);
+            $location = sanitize($_POST['location']);
+            $people_affected = intval($_POST['people_affected']);
+            $description = sanitize($_POST['description']);
+            $immediate_action = sanitize($_POST['immediate_action']);
+            
+            $stmt = $conn->prepare("INSERT INTO emergency_reports (reported_by, camp_id, report_category, issue_type, priority, location, people_affected, description, immediate_action) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("iissssiss", $user_id, $camp_id, $category, $issue_type, $priority, $location, $people_affected, $description, $immediate_action);
+            
+            if ($stmt->execute()) {
+                $success_msg = "Report submitted successfully!";
+            } else {
+                $error_msg = "Error submitting report: " . $conn->error;
+            }
+        }
     }
 }
 
@@ -452,15 +471,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                 <a href="?page=distribution" class="menu-link <?php echo $page === 'distribution' ? 'active' : ''; ?>"><i data-lucide="trending-up"></i> <span>Aid Distribution</span></a>
                 <a href="?page=report" class="menu-link <?php echo $page === 'report' ? 'active' : ''; ?>"><i data-lucide="file-text"></i> <span>Reports</span></a>
                 <a href="?page=chat" class="menu-link <?php echo $page === 'chat' ? 'active' : ''; ?>"><i data-lucide="message-square"></i> <span>Messages</span></a>
-                <a href="?page=settings" class="menu-link <?php echo $page === 'settings' ? 'active' : ''; ?>"><i data-lucide="settings"></i> <span>Settings</span></a>
             </nav>
-            <div class="sidebar-footer">
-                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer;" onclick="location.href='logout.php'">
-                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: white; display: grid; place-items: center; font-weight: 700;"><?php echo strtoupper(substr($user['full_name'], 0, 1)); ?></div>
-                    <div style="flex: 1; overflow: hidden;"><p style="font-size: 0.8rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($user['full_name']); ?></p></div>
-                    <i data-lucide="log-out" style="width: 14px; color: var(--danger);"></i>
-                </div>
-            </div>
         </aside>
 
         <main class="main">
@@ -471,7 +482,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                     elseif($page === 'inventory') echo 'Manage camp inventory';
                     else echo 'Managing: ' . htmlspecialchars($camp_name); 
                 ?></span></div>
-                <div class="header-actions">
+                <div class="header-actions" style="display: flex; align-items: center; gap: 15px;">
                     <?php if ($page === 'families'): ?>
                         <button class="btn btn-primary" style="background: #0f172a;" onclick="toggleModal('registerModal')"><i data-lucide="plus" style="width:18px;"></i> Register Manually</button>
                     <?php elseif ($page === 'volunteers'): ?>
@@ -480,8 +491,26 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                         <button class="btn btn-primary" style="background: #0f172a;" onclick="toggleModal('recordDistModal')"><i data-lucide="plus" style="width:18px;"></i> Record Distribution</button>
                     <?php else: ?>
                         <button class="btn btn-outline" onclick="location.reload()"><i data-lucide="refresh-cw" style="width:18px;"></i></button>
-                        <button class="btn btn-primary" onclick="location.href='?page=report'"><i data-lucide="file-text" style="width:18px;"></i> Report</button>
+                        <button class="btn btn-primary" onclick="location.href='?page=submit_report'"><i data-lucide="file-text" style="width:18px;"></i> Create Report</button>
                     <?php endif; ?>
+                    
+                    <div style="position: relative; display: inline-block;">
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 6px 16px 6px 6px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 99px; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" onclick="document.getElementById('profileDropdown').style.display = document.getElementById('profileDropdown').style.display === 'block' ? 'none' : 'block'" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
+                            <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary, #0f172a); color: white; display: grid; place-items: center; font-weight: 700; font-size: 1.1rem;"><?php echo strtoupper(substr($user['full_name'], 0, 1)); ?></div>
+                            <div style="display: flex; flex-direction: column; justify-content: center;">
+                                <p style="font-size: 0.85rem; font-weight: 700; color: #0f172a; margin: 0; white-space: nowrap; line-height: 1.2; letter-spacing: 0.2px;"><?php echo htmlspecialchars($user['full_name']); ?></p>
+                                <p style="font-size: 0.7rem; color: #64748b; margin: 0; white-space: nowrap; line-height: 1.2;">Camp Manager</p>
+                            </div>
+                        </div>
+                        <div id="profileDropdown" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; width: 180px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); z-index: 1000; overflow: hidden; padding: 4px 0;">
+                            <div style="padding: 10px 16px; cursor: pointer; color: #334155; font-size: 0.9rem; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" onclick="location.href='?page=settings'">
+                                Profile
+                            </div>
+                            <div style="padding: 10px 16px; cursor: pointer; color: #dc2626; font-size: 0.9rem; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'" onclick="location.href='logout.php'">
+                                Logout
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -1242,34 +1271,140 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
 
                 <?php elseif ($page === 'report'): ?>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                        <h2 style="font-size: 1.5rem; font-weight: 700;">Volunteer Field Reports</h2>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <h2 style="font-size: 1.5rem; font-weight: 700; margin: 0;">Camp Comprehensive Reports</h2>
+                            <div style="display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 4px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <label style="font-weight: 600; font-size: 0.85rem; color: #475569;">Filter All by Date:</label>
+                                <input type="date" id="reportDateFilter" class="form-control" style="padding: 4px 8px; font-size: 0.85rem; width: auto; border: 1px solid #cbd5e1;" onchange="filterReportsByDate()">
+                                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.85rem; background: white;" onclick="document.getElementById('reportDateFilter').value=''; filterReportsByDate();">Clear</button>
+                            </div>
+                        </div>
                         <div style="display: flex; gap: 10px;">
-                            <span class="badge" style="background: #eff6ff; color: #1e40af;"><?php echo count($field_reports); ?> Total Reports</span>
+                            <button class="btn btn-outline" style="background: #fff; border: 1px solid #cbd5e1; display: flex; align-items: center; gap: 6px;" onclick="window.open('?page=summary_report', '_blank')"><i data-lucide="printer" style="width:16px;"></i> PDF Summary</button>
+                            <button class="btn btn-primary" onclick="location.href='?page=submit_report'">+ Create New Report</button>
                         </div>
                     </div>
 
-                    <div class="ap-table-panel">
+                    <!-- Supply Inventory Section -->
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem;">📦 Current Available Supply Inventory</h3>
+                    <div class="ap-table-panel" style="margin-bottom: 2rem;">
                         <div class="table-container">
                             <table>
+                                <thead>
+                                    <tr>
+                                        <th>Item Name</th>
+                                        <th>Category</th>
+                                        <th>Quantity</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if(empty($inventory)): ?>
+                                        <tr><td colspan="4" style="text-align: center;">No inventory data available.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach($inventory as $item): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><span class="category-badge cat-<?php echo strtolower($item['category'] ?? 'other'); ?>"><?php echo htmlspecialchars($item['category'] ?? 'N/A'); ?></span></td>
+                                                <td><strong><?php echo $item['quantity'] . ' ' . ($item['unit'] ?? ''); ?></strong></td>
+                                                <td><span style="color: <?php echo $item['status'] === 'Out of Stock' ? '#e11d48' : ($item['status'] === 'Limited' ? '#f59e0b' : '#10b981'); ?>; font-weight: 700;"><?php echo $item['status']; ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Volunteer Tasks Section -->
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem;">📋 Volunteer Tasks (Pending & Finished)</h3>
+                    <div class="ap-table-panel" style="margin-bottom: 2rem;">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Task Name</th>
+                                        <th>Assigned To</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if(empty($tasks)): ?>
+                                        <tr class="no-records-row"><td colspan="4" style="text-align: center;">No tasks available.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach($tasks as $t): ?>
+                                            <tr class="task-row" data-date="<?php echo date('Y-m-d', strtotime($t['created_at'])); ?>">
+                                                <td><strong><?php echo htmlspecialchars($t['task_name']); ?></strong><br><small style="color: #64748b;"><?php echo htmlspecialchars(substr($t['description'], 0, 50)); ?>...</small></td>
+                                                <td><?php echo htmlspecialchars($t['assigned_name'] ?? 'Unassigned'); ?></td>
+                                                <td><span class="badge" style="background: <?php echo $t['priority'] === 'high' ? '#fee2e2' : '#f1f5f9'; ?>; color: <?php echo $t['priority'] === 'high' ? '#ef4444' : '#475569'; ?>;"><?php echo ucfirst($t['priority']); ?></span></td>
+                                                <td><span class="badge" style="<?php if($t['status'] === 'completed') echo 'background: #dcfce7; color: #166534;'; else echo 'background: #fef9c3; color: #854d0e;'; ?>"><?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <tr id="noTasksFound" style="display:none;"><td colspan="4" style="text-align:center; padding: 2rem; color: var(--text-muted);">No tasks found for selected date.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Aid Distribution Details -->
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem;">🚚 Aid Distribution Details</h3>
+                    <div class="ap-table-panel" style="margin-bottom: 2rem;">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Recipient</th>
+                                        <th>Items Distributed</th>
+                                        <th>Distributed By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if(empty($all_distributions)): ?>
+                                        <tr class="no-records-row"><td colspan="4" style="text-align: center;">No distribution records found.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach($all_distributions as $d): ?>
+                                            <tr class="dist-row" data-date="<?php echo date('Y-m-d', strtotime($d['distributed_at'])); ?>">
+                                                <td><?php echo date('M d, Y h:i A', strtotime($d['distributed_at'])); ?></td>
+                                                <td><strong><?php echo htmlspecialchars($d['recipient_name']); ?></strong></td>
+                                                <td><?php echo htmlspecialchars($d['items']); ?> <span class="badge" style="background:#eff6ff;color:#1e40af;">Qty: <?php echo $d['quantity']; ?></span></td>
+                                                <td><?php echo htmlspecialchars($d['distributor_name']); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <tr id="noDistFound" style="display:none;"><td colspan="4" style="text-align:center; padding: 2rem; color: var(--text-muted);">No distributions found for selected date.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem;">🚨 Volunteer Field Reports</h3>
+
+                    <div class="ap-table-panel">
+                        <div class="table-container">
+                            <table id="fieldReportsTable">
                                 <thead>
                                     <tr>
                                         <th>Date & Time</th>
                                         <th>Volunteer</th>
                                         <th>Category</th>
                                         <th>Priority</th>
-                                        <th>Description</th>
+                                        <th>Issue Type</th>
                                         <th>Location</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($field_reports)): ?>
-                                        <tr><td colspan="6" style="text-align:center; padding: 4rem; color: var(--text-muted);">
+                                        <tr class="no-records-row"><td colspan="7" style="text-align:center; padding: 4rem; color: var(--text-muted);">
                                             <div style="font-size: 2.5rem; margin-bottom: 1rem;">📋</div>
                                             No field reports submitted yet.
                                         </td></tr>
                                     <?php else: ?>
                                         <?php foreach ($field_reports as $fr): ?>
-                                            <tr>
+                                            <tr class="report-row" data-date="<?php echo date('Y-m-d', strtotime($fr['created_at'])); ?>">
                                                 <td style="font-size: 0.85rem; color: var(--text-muted);">
                                                     <?php echo date('M d, Y', strtotime($fr['created_at'])); ?><br>
                                                     <?php echo date('h:i A', strtotime($fr['created_at'])); ?>
@@ -1287,27 +1422,433 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                                         <?php echo htmlspecialchars($fr['priority']); ?>
                                                     </span>
                                                 </td>
-                                                <td style="max-width: 300px;">
-                                                    <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 4px;"><?php echo htmlspecialchars($fr['issue_type']); ?></p>
-                                                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;"><?php echo htmlspecialchars($fr['description']); ?></p>
-                                                    <?php if(!empty($fr['immediate_action'])): ?>
-                                                        <p style="font-size: 0.75rem; color: #10b981; font-weight: 600; margin-top: 5px;">Action: <?php echo htmlspecialchars($fr['immediate_action']); ?></p>
-                                                    <?php endif; ?>
-                                                </td>
+                                                <td style="font-weight: 600; font-size: 0.9rem;"><?php echo htmlspecialchars($fr['issue_type']); ?></td>
                                                 <td style="font-size: 0.85rem;"><?php echo htmlspecialchars($fr['location']); ?></td>
+                                                <td>
+                                                    <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem; background: white;" onclick="openReportModal(<?php echo htmlspecialchars(json_encode($fr)); ?>)">View Details</button>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
+                                        <tr id="noReportsFound" style="display:none;"><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-muted);">No reports found for selected date.</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
+                    <!-- Report Details Modal -->
+                    <div id="reportDetailsModal" class="modal">
+                        <div class="modal-content" style="max-width: 600px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                                <h3 style="font-size: 1.25rem; font-weight: 700;">Field Report Details</h3>
+                                <button onclick="toggleModal('reportDetailsModal')" style="background: none; border: none; cursor: pointer; color: var(--text-muted);"><i data-lucide="x"></i></button>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Reported By</p>
+                                    <p style="font-weight: 700; font-size: 0.95rem;" id="modal_volunteer_name"></p>
+                                </div>
+                                <div>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Date & Time</p>
+                                    <p style="font-weight: 700; font-size: 0.95rem;" id="modal_report_date"></p>
+                                </div>
+                                <div>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Category / Priority</p>
+                                    <p style="font-weight: 700; font-size: 0.95rem;"><span id="modal_category" class="badge"></span> <span id="modal_priority" class="badge"></span></p>
+                                </div>
+                                <div>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Location / Affected</p>
+                                    <p style="font-weight: 700; font-size: 0.95rem;" id="modal_location_affected"></p>
+                                </div>
+                            </div>
 
-                <?php elseif ($page === 'messages'): ?>
+                            <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; border: 1px solid var(--border); margin-bottom: 1rem;">
+                                <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Issue Type / Title</p>
+                                <p style="font-weight: 700; font-size: 1rem; margin-bottom: 1rem; color: #0f172a;" id="modal_issue_type"></p>
+                                
+                                <p style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Full Description</p>
+                                <p style="font-size: 0.9rem; line-height: 1.5; color: #334155; white-space: pre-wrap;" id="modal_description"></p>
+                            </div>
+
+                            <div style="background: #f0fdf4; border-radius: 8px; padding: 1rem; border: 1px solid #dcfce7;" id="modal_action_container">
+                                <p style="font-size: 0.75rem; color: #166534; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Immediate Action Taken / Remarks</p>
+                                <p style="font-size: 0.9rem; line-height: 1.5; color: #166534; font-weight: 500; white-space: pre-wrap;" id="modal_action"></p>
+                            </div>
+
+                            <div style="margin-top: 2rem; text-align: right;">
+                                <button class="btn btn-primary" onclick="toggleModal('reportDetailsModal')">Close</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        function filterReportsByDate() {
+                            const filterDate = document.getElementById('reportDateFilter').value;
+
+                            // Filter Volunteer Field Reports
+                            const reportRows = document.querySelectorAll('.report-row');
+                            let reportCount = 0;
+                            reportRows.forEach(row => {
+                                const rowDate = row.getAttribute('data-date');
+                                if (!filterDate || rowDate === filterDate) { row.style.display = ''; reportCount++; } else { row.style.display = 'none'; }
+                            });
+                            const noReportsRow = document.getElementById('noReportsFound');
+                            if (noReportsRow) noReportsRow.style.display = reportCount === 0 ? '' : 'none';
+
+                            // Filter Volunteer Tasks
+                            const taskRows = document.querySelectorAll('.task-row');
+                            let taskCount = 0;
+                            taskRows.forEach(row => {
+                                const rowDate = row.getAttribute('data-date');
+                                if (!filterDate || rowDate === filterDate) { row.style.display = ''; taskCount++; } else { row.style.display = 'none'; }
+                            });
+                            const noTasksRow = document.getElementById('noTasksFound');
+                            if (noTasksRow) noTasksRow.style.display = taskCount === 0 ? '' : 'none';
+
+                            // Filter Distributions
+                            const distRows = document.querySelectorAll('.dist-row');
+                            let distCount = 0;
+                            distRows.forEach(row => {
+                                const rowDate = row.getAttribute('data-date');
+                                if (!filterDate || rowDate === filterDate) { row.style.display = ''; distCount++; } else { row.style.display = 'none'; }
+                            });
+                            const noDistRow = document.getElementById('noDistFound');
+                            if (noDistRow) noDistRow.style.display = distCount === 0 ? '' : 'none';
+                        }
+
+                        function openReportModal(report) {
+                            document.getElementById('modal_volunteer_name').innerText = report.volunteer_name;
+                            document.getElementById('modal_report_date').innerText = new Date(report.created_at).toLocaleString();
+                            document.getElementById('modal_category').innerText = report.report_category.toUpperCase();
+                            document.getElementById('modal_priority').innerText = report.priority;
+                            
+                            // Colors for badges
+                            document.getElementById('modal_category').style.background = report.report_category === 'incident' ? '#fff7ed' : '#f0fdf4';
+                            document.getElementById('modal_category').style.color = report.report_category === 'incident' ? '#ea580c' : '#16a34a';
+                            
+                            document.getElementById('modal_priority').style.background = report.priority === 'Critical' ? '#fef2f2' : (report.priority === 'High' ? '#fff1f2' : '#f8fafc');
+                            document.getElementById('modal_priority').style.color = report.priority === 'Critical' ? '#dc2626' : (report.priority === 'High' ? '#e11d48' : '#64748b');
+
+                            document.getElementById('modal_location_affected').innerText = report.location + (report.people_affected > 0 ? (' (Affected: ' + report.people_affected + ')') : '');
+                            document.getElementById('modal_issue_type').innerText = report.issue_type;
+                            document.getElementById('modal_description').innerText = report.description;
+                            
+                            const actionContainer = document.getElementById('modal_action_container');
+                            if (report.immediate_action && report.immediate_action.trim() !== '') {
+                                document.getElementById('modal_action').innerText = report.immediate_action;
+                                actionContainer.style.display = 'block';
+                            } else {
+                                actionContainer.style.display = 'none';
+                            }
+
+                            toggleModal('reportDetailsModal');
+                        }
+                    </script>
+
+
+                <?php elseif ($page === 'submit_report'): ?>
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+                        <h1 class="page-title">Submit Field Report</h1>
+                        <p class="page-subtitle">Report an activity completion or an emergency issue</p>
+                    </div>
+
+                    <div class="panel" style="max-width: 800px; margin: 0 auto; padding: 2.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
+                        <form method="POST" action="camp_manager_dashboard.php?page=report">
+                            <input type="hidden" name="action" value="submit_report">
+                            
+                            <div class="form-group">
+                                <label>Report Category <span style="color:red;">*</span></label>
+                                <select name="report_category" required class="form-control" style="padding: 0.8rem;">
+                                    <option value="activity">Regular Activity Report</option>
+                                    <option value="issue">Emergency/Issue Report</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Report Title / Issue Type <span style="color:red;">*</span></label>
+                                <input type="text" name="issue_type" placeholder="e.g. Food Distribution, Medical Emergency" required class="form-control" style="padding: 0.8rem;">
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                                <div class="form-group">
+                                    <label>Priority Level <span style="color:red;">*</span></label>
+                                    <select name="priority" required class="form-control" style="padding: 0.8rem;">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Location <span style="color:red;">*</span></label>
+                                    <input type="text" name="location" placeholder="Section/Area" required class="form-control" style="padding: 0.8rem;">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>People Affected (if any)</label>
+                                <input type="number" name="people_affected" placeholder="Number of people" min="0" class="form-control" style="padding: 0.8rem;">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Report Description <span style="color:red;">*</span></label>
+                                <textarea name="description" placeholder="Provide detailed information..." required class="form-control" style="padding: 0.8rem; min-height: 120px;"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Action Taken / Remarks</label>
+                                <textarea name="immediate_action" placeholder="What was done or any additional notes" class="form-control" style="padding: 0.8rem; min-height: 80px;"></textarea>
+                            </div>
+
+                            <div style="margin-top: 2rem;">
+                                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1rem; background: #0f172a;">🚀 Submit Report</button>
+                            </div>
+                        </form>
+                    </div>
+
+                <?php elseif ($page === 'summary_report'): ?>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+                    
+                    <div style="max-width: 900px; margin: 0 auto; background: #f8fafc; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                            <h2 style="margin: 0; font-size: 1.2rem;">Preview Summary Report</h2>
+                            <div>
+                                <button id="downloadPdfBtn" class="btn btn-primary" style="padding: 8px 16px;"><i data-lucide="download" style="width: 16px;"></i> Download PDF</button>
+                                <button class="btn btn-outline" style="padding: 8px 16px;" onclick="window.close()">Close</button>
+                            </div>
+                        </div>
+
+                        <div id="pdf-content" style="background: white; padding: 40px; color: black; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
+                            <div style="text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 30px;">
+                                <h1 style="font-size: 26px; margin-bottom: 8px; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">Disaster Relief System</h1>
+                                <h2 style="font-size: 20px; color: #334155; margin-bottom: 8px;">Camp Summary Report</h2>
+                                <p style="margin: 0; font-size: 13px; color: #64748b;">Generated on: <?php echo date('F d, Y h:i A'); ?></p>
+                            </div>
+                            
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="font-size: 16px; background: #f1f5f9; padding: 8px 12px; border-left: 4px solid #3b82f6; margin-bottom: 15px; color: #1e293b;">Camp Details</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                                    <tr>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; width: 35%; font-weight: 600; color: #475569;">Camp Name</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;"><?php echo htmlspecialchars($camp['camp_name'] ?? 'N/A'); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #475569;">Location</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;"><?php echo htmlspecialchars($camp['location'] ?? 'N/A'); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #475569;">Capacity vs Occupancy</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;">
+                                            <?php echo ($camp['current_occupancy'] ?? 0) . ' / ' . ($camp['capacity'] ?? 500); ?> 
+                                            (<?php echo ($camp['capacity'] > 0) ? round((($camp['current_occupancy'] ?? 0)/$camp['capacity'])*100) : 0; ?>%)
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #475569;">Manager</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;"><?php echo htmlspecialchars($user['full_name']); ?></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="font-size: 16px; background: #f1f5f9; padding: 8px 12px; border-left: 4px solid #10b981; margin-bottom: 15px; color: #1e293b;">Inventory Overview</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Item Name</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Category</th>
+                                        <th style="padding: 10px; text-align: right; color: #334155;">Quantity</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Status</th>
+                                    </tr>
+                                    <?php if(empty($inventory)): ?>
+                                        <tr><td colspan="4" style="padding: 10px; text-align: center; color: #64748b;">No inventory data available</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach($inventory as $item): ?>
+                                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                                            <td style="padding: 10px; color: #0f172a; font-weight: 500;"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                            <td style="padding: 10px; color: #475569;"><?php echo htmlspecialchars($item['category'] ?? 'N/A'); ?></td>
+                                            <td style="padding: 10px; text-align: right; font-weight: 600;"><?php echo $item['quantity'] . ' ' . ($item['unit'] ?? ''); ?></td>
+                                            <td style="padding: 10px; color: <?php echo $item['status'] === 'Out of Stock' ? '#ef4444' : ($item['status'] === 'Limited' ? '#f59e0b' : '#10b981'); ?>; font-weight: 600;"><?php echo $item['status']; ?></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="font-size: 16px; background: #f1f5f9; padding: 8px 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px; color: #1e293b;">Volunteer Tasks (Pending & Finished)</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Task Name</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Assigned To</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Priority</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Status</th>
+                                    </tr>
+                                    <?php if(empty($tasks)): ?>
+                                        <tr><td colspan="4" style="padding: 10px; text-align: center; color: #64748b;">No tasks available</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach(array_slice($tasks, 0, 10) as $t): ?>
+                                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                                            <td style="padding: 10px; color: #0f172a; font-weight: 500;"><?php echo htmlspecialchars($t['task_name']); ?></td>
+                                            <td style="padding: 10px; color: #475569;"><?php echo htmlspecialchars($t['assigned_name'] ?? 'Unassigned'); ?></td>
+                                            <td style="padding: 10px; font-weight: 600; color: <?php echo $t['priority'] === 'high' ? '#dc2626' : '#475569'; ?>;"><?php echo ucfirst($t['priority']); ?></td>
+                                            <td style="padding: 10px; font-weight: 600; color: <?php echo $t['status'] === 'completed' ? '#10b981' : '#f59e0b'; ?>;"><?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="font-size: 16px; background: #f1f5f9; padding: 8px 12px; border-left: 4px solid #ec4899; margin-bottom: 15px; color: #1e293b;">Aid Distribution Details</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Date</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Recipient</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Items</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155;">Distributor</th>
+                                    </tr>
+                                    <?php if(empty($all_distributions)): ?>
+                                        <tr><td colspan="4" style="padding: 10px; text-align: center; color: #64748b;">No distributions available</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach(array_slice($all_distributions, 0, 10) as $d): ?>
+                                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                                            <td style="padding: 10px; color: #475569;"><?php echo date('M d, Y', strtotime($d['distributed_at'])); ?></td>
+                                            <td style="padding: 10px; color: #0f172a; font-weight: 500;"><?php echo htmlspecialchars($d['recipient_name']); ?></td>
+                                            <td style="padding: 10px; color: #475569;"><?php echo htmlspecialchars($d['items']) . ' (Qty: ' . $d['quantity'] . ')'; ?></td>
+                                            <td style="padding: 10px; color: #475569;"><?php echo htmlspecialchars($d['distributor_name']); ?></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+
+                            <div style="margin-bottom: 40px;">
+                                <h3 style="font-size: 16px; background: #f1f5f9; padding: 8px 12px; border-left: 4px solid #f59e0b; margin-bottom: 15px; color: #1e293b;">Recent Field Reports</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <th style="padding: 10px; text-align: left; color: #334155; width: 15%;">Date</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155; width: 25%;">Issue/Activity</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155; width: 45%;">Description</th>
+                                        <th style="padding: 10px; text-align: left; color: #334155; width: 15%;">Priority</th>
+                                    </tr>
+                                    <?php if(empty($field_reports)): ?>
+                                        <tr><td colspan="4" style="padding: 10px; text-align: center; color: #64748b;">No field reports available</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach(array_slice($field_reports, 0, 8) as $fr): ?>
+                                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                                            <td style="padding: 10px; color: #475569;"><?php echo date('M d, Y', strtotime($fr['created_at'])); ?></td>
+                                            <td style="padding: 10px; color: #0f172a; font-weight: 500;"><?php echo htmlspecialchars($fr['issue_type']); ?></td>
+                                            <td style="padding: 10px; color: #475569;"><?php echo htmlspecialchars(strlen($fr['description']) > 60 ? substr($fr['description'], 0, 60) . '...' : $fr['description']); ?></td>
+                                            <td style="padding: 10px; font-weight: 600; color: <?php echo $fr['priority'] === 'Critical' ? '#dc2626' : ($fr['priority'] === 'High' ? '#e11d48' : '#475569'); ?>;"><?php echo htmlspecialchars($fr['priority']); ?></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+                            
+                            <div style="margin-top: 60px; display: flex; justify-content: flex-end;">
+                                <div style="text-align: center; width: 200px;">
+                                    <div style="border-bottom: 1px solid #1e293b; height: 30px; margin-bottom: 10px;"></div>
+                                    <p style="margin: 0; font-size: 14px; color: #334155; font-weight: 600;">Authorized Signature</p>
+                                    <p style="margin: 5px 0 0; font-size: 12px; color: #64748b;"><?php echo htmlspecialchars($user['full_name']); ?><br>Camp Manager</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        document.getElementById('downloadPdfBtn').addEventListener('click', function() {
+                            const btn = this;
+                            const originalText = btn.innerHTML;
+                            btn.innerHTML = 'Generating...';
+                            btn.disabled = true;
+
+                            const element = document.getElementById('pdf-content');
+                            const opt = {
+                                margin:       [0.5, 0.5, 0.5, 0.5],
+                                filename:     'Camp_Summary_Report_<?php echo date('Y-m-d'); ?>.pdf',
+                                image:        { type: 'jpeg', quality: 0.98 },
+                                html2canvas:  { scale: 2, useCORS: true },
+                                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                            };
+                            
+                            html2pdf().set(opt).from(element).save().then(function() {
+                                btn.innerHTML = originalText;
+                                btn.disabled = false;
+                            });
+                        });
+                    </script>
+
+                <?php elseif ($page === 'submit_report'): ?>
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+                        <h1 class="page-title">Submit Field Report</h1>
+                        <p class="page-subtitle">Report an activity completion or an emergency issue</p>
+                    </div>
+
+                    <div class="panel" style="max-width: 800px; margin: 0 auto; padding: 2.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
+                        <form method="POST" action="camp_manager_dashboard.php?page=report">
+                            <input type="hidden" name="action" value="submit_report">
+                            
+                            <div class="form-group">
+                                <label>Report Category <span style="color:red;">*</span></label>
+                                <select name="report_category" required class="form-control" style="padding: 0.8rem;">
+                                    <option value="activity">Regular Activity Report</option>
+                                    <option value="issue">Emergency/Issue Report</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Report Title / Issue Type <span style="color:red;">*</span></label>
+                                <input type="text" name="issue_type" placeholder="e.g. Food Distribution, Medical Emergency" required class="form-control" style="padding: 0.8rem;">
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                                <div class="form-group">
+                                    <label>Priority Level <span style="color:red;">*</span></label>
+                                    <select name="priority" required class="form-control" style="padding: 0.8rem;">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Location <span style="color:red;">*</span></label>
+                                    <input type="text" name="location" placeholder="Section/Area" required class="form-control" style="padding: 0.8rem;">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>People Affected (if any)</label>
+                                <input type="number" name="people_affected" placeholder="Number of people" min="0" class="form-control" style="padding: 0.8rem;">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Report Description <span style="color:red;">*</span></label>
+                                <textarea name="description" placeholder="Provide detailed information..." required class="form-control" style="padding: 0.8rem; min-height: 120px;"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Action Taken / Remarks</label>
+                                <textarea name="immediate_action" placeholder="What was done or any additional notes" class="form-control" style="padding: 0.8rem; min-height: 80px;"></textarea>
+                            </div>
+
+                            <div style="margin-top: 2rem;">
+                                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1rem; background: #0f172a;">🚀 Submit Report</button>
+                            </div>
+                        </form>
+                    </div>
+
+                <?php elseif ($page === 'chat'): ?>
                     <div class="panel" style="padding: 4rem; text-align: center; border-style: dashed; background: transparent; opacity: 0.5;">
                         <i data-lucide="message-square" style="width: 48px; color: var(--text-muted); margin-bottom: 1rem;"></i>
-                        <h3>Messages</h3>
+                        <h3 style="margin-bottom: 0.5rem;">Messages / Chat</h3>
+                        <p class="text-muted">Chat functionality is under development and coming soon.</p>
                     </div>
 
                 <?php elseif ($page === 'settings'): ?>
