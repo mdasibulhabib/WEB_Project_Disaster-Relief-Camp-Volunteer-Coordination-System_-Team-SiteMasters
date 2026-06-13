@@ -169,6 +169,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // Send message to affected person (chat power must be enabled)
+        if ($action === 'send_affected_message') {
+            $ap_id = intval($_POST['affected_id']);
+            $msg = sanitize($_POST['message'] ?? '');
+            $manager_name = $conn->real_escape_string($user['full_name']);
+            if ($msg && $ap_id) {
+                // Verify this affected person has chat_power and is in this camp
+                $check = $conn->query("SELECT id FROM affected_persons WHERE id = $ap_id AND camp_id = $camp_id AND chat_power = 1");
+                if ($check && $check->num_rows > 0) {
+                    $conn->query("INSERT INTO affected_messages (affected_id, message_text, is_from_admin, sender_label) VALUES ($ap_id, '$msg', 1, '$manager_name')");
+                    header("Location: camp_manager_dashboard.php?page=chat&section=affected&affected_id=$ap_id");
+                    exit();
+                } else {
+                    $error_msg = "Cannot send message: person not found or chat not enabled.";
+                }
+            }
+        }
+
         if ($action === 'create_task_from_request') {
             $req_id = intval($_POST['request_id']);
             $vol_id = intval($_POST['volunteer_id']);
@@ -714,7 +732,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                     </div>
                     <div class="panel">
                         <div class="panel-header"><h3 class="panel-title">Assigned People</h3><button class="btn btn-outline btn-sm" onclick="location.href='?page=families'">View All</button></div>
-                        <div class="table-container"><table><thead><tr><th>Name</th><th>Members</th><th>Location</th><th>Needs</th><th>Date</th></tr></thead><tbody><?php foreach (array_slice($assigned_affected, 0, 5) as $f): ?><tr><td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td><td><span class="badge" style="background:#f1f5f9;"><?php echo $f['family_members']; ?></span></td><td><?php echo htmlspecialchars($f['location']); ?></td><td><?php echo htmlspecialchars(substr($f['needs'] ?? '', 0, 40)); ?>...</td><td style="color: #94a3b8;"><?php echo date('M d', strtotime($f['created_at'])); ?></td></tr><?php endforeach; ?></tbody></table></div>
+                        <div class="table-container"><table><thead><tr><th>Name</th><th>Access Key</th><th>Members</th><th>Location</th><th>Needs</th><th>Date</th></tr></thead><tbody><?php foreach (array_slice($assigned_affected, 0, 5) as $f): ?><tr><td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td><td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($f['access_key']); ?></code></td><td><span class="badge" style="background:#f1f5f9;"><?php echo $f['family_members']; ?></span></td><td><?php echo htmlspecialchars($f['location']); ?></td><td><?php echo htmlspecialchars(substr($f['needs'] ?? '', 0, 40)); ?>...</td><td style="color: #94a3b8;"><?php echo date('M d', strtotime($f['created_at'])); ?></td></tr><?php endforeach; ?></tbody></table></div>
                     </div>
 
                 <?php elseif ($page === 'overview'): ?>
@@ -816,6 +834,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 <thead>
                                     <tr>
                                         <th>Name</th>
+                                        <th>Access Key</th>
                                         <th>Family Members</th>
                                         <th>Location</th>
                                         <th>Requested Date</th>
@@ -826,6 +845,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                     <?php foreach ($pending_affected as $p): ?>
                                         <tr>
                                             <td><span style="font-weight: 600;"><?php echo htmlspecialchars($p['full_name']); ?></span></td>
+                                            <td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($p['access_key']); ?></code></td>
                                             <td><?php echo $p['family_members']; ?></td>
                                             <td><?php echo htmlspecialchars($p['location']); ?></td>
                                             <td><?php echo date('Y-m-d', strtotime($p['created_at'])); ?></td>
@@ -843,7 +863,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                         </div>
                     </div>
                     <?php endif; ?>
-
+ 
                     <div class="ap-table-panel">
                         <div class="ap-table-header">Assigned People & Families</div>
                         <div class="table-container">
@@ -851,6 +871,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 <thead>
                                     <tr>
                                         <th>Name</th>
+                                        <th>Access Key</th>
                                         <th>Family Members</th>
                                         <th>Location</th>
                                         <th>Needs</th>
@@ -860,11 +881,12 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 </thead>
                                 <tbody>
                                     <?php if (empty($assigned_affected)): ?>
-                                        <tr><td colspan="6" style="text-align:center; padding: 3rem; color: var(--text-muted);">No assigned residents yet.</td></tr>
+                                        <tr><td colspan="7" style="text-align:center; padding: 3rem; color: var(--text-muted);">No assigned residents yet.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($assigned_affected as $f): ?>
                                             <tr>
                                                 <td><span style="font-weight: 600;"><?php echo htmlspecialchars($f['full_name']); ?></span></td>
+                                                <td><code style="background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #2563eb;"><?php echo htmlspecialchars($f['access_key']); ?></code></td>
                                                 <td><?php echo $f['family_members']; ?></td>
                                                 <td><?php echo htmlspecialchars($f['location']); ?></td>
                                                 <td><span style="color: var(--text-muted);"><?php echo htmlspecialchars($f['needs'] ?? 'N/A'); ?></span></td>
@@ -1501,18 +1523,18 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-
-
-                <?php elseif ($page === 'chat'): ?>
+                    </div>                <?php elseif ($page === 'chat'): ?>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                        <h2 style="font-size: 1.5rem; font-weight: 700;">Support & Team Chat</h2>
+                        <h2 style="font-size: 1.5rem; font-weight: 700;">Support &amp; Team Chat</h2>
                         <div style="display: flex; gap: 10px;">
                             <span class="badge" style="background: #eff6ff; color: #2563eb;">Direct Messages</span>
                         </div>
                     </div>
 
                     <?php
+                    $chat_section = $_GET['section'] ?? 'team'; // 'team' or 'affected'
+                    $chat_affected_id = isset($_GET['affected_id']) ? intval($_GET['affected_id']) : 0;
+
                     // Get list of contacts: all admins and volunteers assigned to this camp
                     $contact_users_query = "
                         SELECT u.id, u.full_name, u.role,
@@ -1534,26 +1556,65 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                         }
                     }
 
+                    // Fetch affected persons with chat_power in this camp
+                    $affected_contacts_res = $conn->query("
+                        SELECT id, full_name, registration_status,
+                            (SELECT message_text FROM affected_messages WHERE affected_id = affected_persons.id ORDER BY created_at DESC LIMIT 1) as last_msg,
+                            (SELECT created_at FROM affected_messages WHERE affected_id = affected_persons.id ORDER BY created_at DESC LIMIT 1) as last_msg_time
+                        FROM affected_persons
+                        WHERE camp_id = $camp_id AND chat_power = 1
+                        ORDER BY full_name ASC
+                    ");
+                    $affected_contacts = [];
+                    if ($affected_contacts_res) {
+                        while ($ac = $affected_contacts_res->fetch_assoc()) $affected_contacts[] = $ac;
+                    }
+
                     $chat_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
-                    if ($chat_user_id == 0 && !empty($contacts_list)) {
+                    if ($chat_section === 'team' && $chat_user_id == 0 && !empty($contacts_list)) {
                         $chat_user_id = $contacts_list[0]['id'];
+                    }
+                    if ($chat_section === 'affected' && $chat_affected_id == 0 && !empty($affected_contacts)) {
+                        $chat_affected_id = $affected_contacts[0]['id'];
                     }
 
                     $target_user = null;
-                    if ($chat_user_id > 0) {
+                    if ($chat_section === 'team' && $chat_user_id > 0) {
                         $target_user_query = $conn->query("SELECT * FROM users WHERE id = $chat_user_id");
                         if ($target_user_query) {
                             $target_user = $target_user_query->fetch_assoc();
                         }
                     }
+
+                    $target_affected = null;
+                    if ($chat_section === 'affected' && $chat_affected_id > 0) {
+                        $ta_q = $conn->query("SELECT * FROM affected_persons WHERE id = $chat_affected_id AND camp_id = $camp_id AND chat_power = 1");
+                        if ($ta_q) $target_affected = $ta_q->fetch_assoc();
+                    }
                     ?>
 
+                    <!-- Section tabs -->
+                    <div style="display:flex; gap:0; margin-bottom:1.5rem; border-bottom: 2px solid #e2e8f0;">
+                        <a href="camp_manager_dashboard.php?page=chat&section=team"
+                           style="padding:10px 24px; font-weight:600; font-size:0.9rem; text-decoration:none; border-bottom: 3px solid <?php echo $chat_section === 'team' ? '#6366f1' : 'transparent'; ?>; color: <?php echo $chat_section === 'team' ? '#6366f1' : '#64748b'; ?>; margin-bottom:-2px;">
+                            💬 Team &amp; Admin Chat
+                        </a>
+                        <a href="camp_manager_dashboard.php?page=chat&section=affected"
+                           style="padding:10px 24px; font-weight:600; font-size:0.9rem; text-decoration:none; border-bottom: 3px solid <?php echo $chat_section === 'affected' ? '#8b5cf6' : 'transparent'; ?>; color: <?php echo $chat_section === 'affected' ? '#8b5cf6' : '#64748b'; ?>; margin-bottom:-2px; display:flex; align-items:center; gap:6px;">
+                            🤝 Affected Person Chat
+                            <?php if (!empty($affected_contacts)): ?>
+                            <span style="background:#8b5cf6; color:white; padding:2px 7px; border-radius:999px; font-size:0.7rem;"><?php echo count($affected_contacts); ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </div>
+
+                    <?php if ($chat_section === 'team'): ?>
                     <div class="chat-container">
                         <!-- Chat List -->
                         <div class="chat-list">
                             <?php if (!empty($contacts_list)): ?>
                                 <?php foreach ($contacts_list as $cu): ?>
-                                    <div class="chat-item <?php echo ($cu['id'] == $chat_user_id) ? 'active' : ''; ?>" onclick="location.href='camp_manager_dashboard.php?page=chat&user_id=<?php echo $cu['id']; ?>'">
+                                    <div class="chat-item <?php echo ($cu['id'] == $chat_user_id) ? 'active' : ''; ?>" onclick="location.href='camp_manager_dashboard.php?page=chat&section=team&user_id=<?php echo $cu['id']; ?>'">
                                         <div class="chat-item-name"><?php echo htmlspecialchars($cu['full_name']); ?></div>
                                         <div class="chat-item-status">
                                             <?php echo ucfirst(str_replace('_', ' ', $cu['role'])); ?>
@@ -1631,6 +1692,94 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                             <?php endif; ?>
                         </div>
                     </div>
+
+                    <?php else: // $chat_section === 'affected' ?>
+                    <div class="chat-container">
+                        <!-- Affected Persons List -->
+                        <div class="chat-list">
+                            <?php if (!empty($affected_contacts)): ?>
+                                <?php foreach ($affected_contacts as $ac): ?>
+                                    <div class="chat-item <?php echo ($ac['id'] == $chat_affected_id) ? 'active' : ''; ?>" 
+                                         onclick="location.href='camp_manager_dashboard.php?page=chat&section=affected&affected_id=<?php echo $ac['id']; ?>'">
+                                        <div class="chat-item-name"><?php echo htmlspecialchars($ac['full_name']); ?></div>
+                                        <div class="chat-item-status" style="color:#8b5cf6;">
+                                            🤝 Affected Person
+                                        </div>
+                                        <?php if ($ac['last_msg']): ?>
+                                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <?php echo htmlspecialchars($ac['last_msg']); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+                                    <div style="font-size:2rem; margin-bottom:0.5rem;">🔒</div>
+                                    No affected persons have been granted chat access yet.<br>
+                                    <small>Ask admin to enable chat access.</small>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Affected Person Chat Window -->
+                        <div class="chat-window">
+                            <?php if ($target_affected): ?>
+                                <div style="padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fdf4ff;">
+                                    <div>
+                                        <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;"><?php echo htmlspecialchars($target_affected['full_name']); ?></h3>
+                                        <span style="font-size: 0.7rem; padding: 2px 8px; background: #ede9fe; color: #6d28d9; border-radius: 999px; font-weight: 600;">🤝 Affected Person · Chat Enabled</span>
+                                    </div>
+                                </div>
+
+                                <!-- Messages from affected_messages table -->
+                                <div class="chat-messages" id="chatContainer">
+                                    <?php
+                                    $ap_msgs = $conn->prepare("SELECT * FROM affected_messages WHERE affected_id = ? ORDER BY created_at ASC");
+                                    $ap_msgs->bind_param("i", $chat_affected_id);
+                                    $ap_msgs->execute();
+                                    $ap_msgs_res = $ap_msgs->get_result();
+                                    if ($ap_msgs_res && $ap_msgs_res->num_rows > 0):
+                                        while ($am = $ap_msgs_res->fetch_assoc()):
+                                            $is_me = ($am['is_from_admin'] == 1); // manager/admin sent it
+                                    ?>
+                                        <div class="message <?php echo $is_me ? 'sent' : ''; ?>">
+                                            <div class="message-content">
+                                                <?php if (!$is_me): ?>
+                                                <div style="font-size:0.72rem; color:#8b5cf6; font-weight:600; margin-bottom:3px;"><?php echo htmlspecialchars($target_affected['full_name']); ?></div>
+                                                <?php elseif (!empty($am['sender_label'])): ?>
+                                                <div style="font-size:0.72rem; color:#6366f1; font-weight:600; margin-bottom:3px; text-align:right;"><?php echo htmlspecialchars($am['sender_label']); ?></div>
+                                                <?php endif; ?>
+                                                <div class="message-text"><?php echo htmlspecialchars($am['message_text']); ?></div>
+                                                <div class="message-time" style="<?php echo $is_me ? 'text-align: right;' : ''; ?>">
+                                                    <?php echo date('M d, h:i A', strtotime($am['created_at'])); ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; else: ?>
+                                        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-top: auto; margin-bottom: auto;">
+                                            No messages yet. Start the conversation with this person.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Chat Input -->
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="action" value="send_affected_message">
+                                    <input type="hidden" name="affected_id" value="<?php echo $chat_affected_id; ?>">
+                                    <div class="chat-input">
+                                        <input type="text" name="message" placeholder="Type a message to <?php echo htmlspecialchars($target_affected['full_name']); ?>..." required autocomplete="off" autofocus>
+                                        <button type="submit" class="btn btn-primary" style="background: #8b5cf6; padding: 0.5rem 1.5rem; border-radius: 10px;">Send</button>
+                                    </div>
+                                </form>
+                            <?php else: ?>
+                                <div style="display: flex; flex-direction:column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap:0.5rem;">
+                                    <div style="font-size:2.5rem;">🤝</div>
+                                    <p>Select an affected person to start chatting.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; // end chat_section check ?>
                     <script>
                         const chatContainer = document.getElementById('chatContainer');
                         if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;

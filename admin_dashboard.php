@@ -253,6 +253,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // Grant/revoke chat power to affected persons
+        if ($action === 'grant_chat_power') {
+            $ap_id = intval($_POST['affected_id']);
+            $update = $conn->query("UPDATE affected_persons SET chat_power = 1 WHERE id = $ap_id");
+            if ($update) {
+                $success_msg = "Chat power granted to affected person.";
+            } else {
+                $error_msg = "Failed to grant chat power.";
+            }
+        }
+
+        if ($action === 'revoke_chat_power') {
+            $ap_id = intval($_POST['affected_id']);
+            $update = $conn->query("UPDATE affected_persons SET chat_power = 0 WHERE id = $ap_id");
+            if ($update) {
+                $success_msg = "Chat power revoked from affected person.";
+            } else {
+                $error_msg = "Failed to revoke chat power.";
+            }
+        }
+
         if ($action === 'verify_donation') {
             $donation_id = intval($_POST['donation_id']);
             
@@ -1427,6 +1448,96 @@ if ($page === 'reports') {
                                     <?php endif; ?>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- ── Affected Person Chat Power Management ─────────── -->
+                        <?php
+                        $ap_list_res = $conn->query("
+                            SELECT ap.id, ap.full_name, ap.registration_status, ap.chat_power, ap.access_key,
+                                   c.camp_name
+                            FROM affected_persons ap
+                            LEFT JOIN camps c ON ap.camp_id = c.id
+                            ORDER BY ap.chat_power DESC, ap.full_name ASC
+                        ");
+                        $ap_list = [];
+                        if ($ap_list_res) {
+                            while ($row = $ap_list_res->fetch_assoc()) $ap_list[] = $row;
+                        }
+                        ?>
+                        <div class="panel" style="margin-top: 1.5rem; border-top: 3px solid #6366f1;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                                <div>
+                                    <h3 style="font-size:1.1rem; font-weight:700; color:#0f172a; margin:0;">Affected Person Chat Access</h3>
+                                    <p style="color:#6b7280; font-size:0.85rem; margin-top:4px;">Grant or revoke the ability for affected persons to chat directly with their camp manager.</p>
+                                </div>
+                                <span style="background:#ede9fe; color:#6d28d9; padding:4px 12px; border-radius:999px; font-size:0.8rem; font-weight:600;">
+                                    <?php echo count(array_filter($ap_list, fn($r) => $r['chat_power'])); ?> Enabled
+                                </span>
+                            </div>
+                            <?php if (!empty($ap_list)): ?>
+                            <div style="overflow-x:auto;">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Affected Person</th>
+                                            <th>Access Key</th>
+                                            <th>Assigned Camp</th>
+                                            <th>Status</th>
+                                            <th>Chat Power</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($ap_list as $ap): ?>
+                                        <tr>
+                                            <td>
+                                                <div style="display:flex; align-items:center; gap:0.6rem;">
+                                                    <div class="profile-avatar" style="width:30px; height:30px; font-size:0.7rem; background:<?php echo $ap['chat_power'] ? '#6366f1' : '#94a3b8'; ?>;">
+                                                        <?php echo strtoupper(substr($ap['full_name'], 0, 1)); ?>
+                                                     </div>
+                                                     <strong><?php echo htmlspecialchars($ap['full_name']); ?></strong>
+                                                 </div>
+                                            </td>
+                                            <td><code style="background: #ede9fe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #6d28d9;"><?php echo htmlspecialchars($ap['access_key']); ?></code></td>
+                                            <td><?php echo htmlspecialchars($ap['camp_name'] ?? '—'); ?></td>
+                                            <td>
+                                                <?php
+                                                $s = $ap['registration_status'];
+                                                $sc = $s === 'assigned' ? '#059669' : ($s === 'pending' ? '#d97706' : '#6b7280');
+                                                ?>
+                                                <span style="color:<?php echo $sc; ?>; font-size:0.85rem; font-weight:600; text-transform:capitalize;"><?php echo $s; ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if ($ap['chat_power']): ?>
+                                                    <span style="display:inline-flex; align-items:center; gap:5px; background:#ede9fe; color:#6d28d9; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:700;">
+                                                        ✅ Enabled
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span style="display:inline-flex; align-items:center; gap:5px; background:#f1f5f9; color:#94a3b8; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:600;">
+                                                        🔒 Disabled
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <form method="POST" style="display:inline;">
+                                                    <input type="hidden" name="affected_id" value="<?php echo $ap['id']; ?>">
+                                                    <?php if ($ap['chat_power']): ?>
+                                                        <input type="hidden" name="action" value="revoke_chat_power">
+                                                        <button type="submit" class="btn-danger" style="font-size:0.8rem; padding:6px 14px; border-radius:8px;" onclick="return confirm('Revoke chat power from <?php echo addslashes($ap['full_name']); ?>?')">Revoke</button>
+                                                    <?php else: ?>
+                                                        <input type="hidden" name="action" value="grant_chat_power">
+                                                        <button type="submit" class="btn-primary" style="font-size:0.8rem; padding:6px 14px; border-radius:8px; background:#6366f1; border-color:#6366f1;">Grant Chat</button>
+                                                    <?php endif; ?>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <?php else: ?>
+                                <p style="color:#6b7280; text-align:center; padding:2rem;">No affected persons registered in the system yet.</p>
+                            <?php endif; ?>
                         </div>
                     <?php else: 
                         $target_user = $conn->query("SELECT * FROM users WHERE id = $chat_user_id")->fetch_assoc();
