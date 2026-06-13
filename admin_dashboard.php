@@ -97,6 +97,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($action === 'edit_inventory') {
+            $inv_id = intval($_POST['inventory_id']);
+            $qty = floatval($_POST['quantity']);
+            $status = sanitize($_POST['status']);
+            $update = $conn->query("UPDATE inventory SET quantity = $qty, status = '$status', updated_at = NOW() WHERE id = $inv_id");
+            if ($update) {
+                $success_msg = "Inventory updated successfully.";
+            } else {
+                $error_msg = "Failed to update inventory.";
+            }
+        }
+
 
         if ($action === 'add_camp') {
             $name = sanitize($_POST['camp_name']);
@@ -614,7 +626,6 @@ if ($page === 'reports') {
                 <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge"><?php echo $stats_query['alerts_count']; ?></span></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=chat" class="menu-link <?php echo $page === 'chat' ? 'active' : ''; ?>"><span class="menu-icon">💬</span>Support Chat<?php if($stats_query['unread_chat'] > 0): ?><span class="menu-badge" style="background: #ef4444;"><?php echo $stats_query['unread_chat']; ?></span><?php endif; ?></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=reports" class="menu-link <?php echo $page === 'reports' ? 'active' : ''; ?>"><span class="menu-icon">📈</span>Reports</a></li>
-                <li class="menu-item"><a href="admin_dashboard.php?page=settings" class="menu-link <?php echo $page === 'settings' ? 'active' : ''; ?>"><span class="menu-icon">⚙️</span>Settings</a></li>
             </ul>
             <div class="sidebar-footer">Admin console for managing camps, volunteers, donations, and alerts.</div>
         </aside>
@@ -644,7 +655,6 @@ if ($page === 'reports') {
                                 <p style="font-size: 0.75rem; color: #6b7280;"><?php echo htmlspecialchars($user['email']); ?></p>
                             </div>
                             <a href="admin_dashboard.php?page=profile" class="dropdown-item">👤 My Profile</a>
-                            <a href="admin_dashboard.php?page=settings" class="dropdown-item">⚙️ Settings</a>
                             <div style="border-top: 1px solid #f3f4f6;"></div>
                             <a href="logout.php" class="dropdown-item logout">🚪 Log Out</a>
                         </div>
@@ -868,7 +878,6 @@ if ($page === 'reports') {
                             <div class="page-title">Volunteers Management</div>
                             <div class="page-subtitle">Approve registrations and manage volunteers</div>
                         </div>
-                        <button type="button" class="btn-primary" onclick="alert('Invite functionality coming soon');">Invite Volunteer</button>
                     </div>
                     <div class="panel" style="margin-bottom: 1.5rem;">
                         <div class="page-header" style="padding:0; margin-bottom:1rem; gap:0.75rem;">
@@ -1138,7 +1147,7 @@ if ($page === 'reports') {
                                             </td>
                                             <td><?php echo date('M d, Y', strtotime($item['updated_at'])); ?></td>
                                             <td class="table-actions">
-                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="alert('Adjusting stock for <?php echo $item['item_name']; ?>')">Adjust</button>
+                                                <button class="btn-secondary" style="padding:0.4rem 0.8rem;" onclick="openEditInventoryModal(<?php echo $item['id']; ?>, '<?php echo addslashes($item['item_name']); ?>', <?php echo $item['quantity']; ?>, '<?php echo addslashes($item['unit']); ?>', '<?php echo addslashes($item['status']); ?>')">Edit</button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -1303,19 +1312,6 @@ if ($page === 'reports') {
                             html2pdf().set(opt).from(element).save();
                         }
                     </script>
-                <?php elseif ($page === 'settings'): ?>
-                    <div class="page-header">
-                        <div>
-                            <div class="page-title">Settings</div>
-                            <div class="page-subtitle">Configure admin preferences and system behavior</div>
-                        </div>
-                    </div>
-                    <div class="panel" style="max-width:700px;">
-                        <div class="form-field"><label>Notification Preferences</label><select><option>Email & push</option><option>Email only</option><option>Push only</option></select></div>
-                        <div class="form-field"><label>Theme</label><select><option>Light</option><option>Dark</option></select></div>
-                        <div class="form-field"><label>System Status</label><input type="text" value="All systems operational" disabled></div>
-                        <button class="btn-secondary" type="button" onclick="alert('Settings saved');">Save Settings</button>
-                    </div>
                 <?php elseif ($page === 'tasks'): ?>
                     <div class="page-header">
                         <div>
@@ -1587,7 +1583,6 @@ if ($page === 'reports') {
     </div>
     <div class="dropdown-menu" id="adminProfileMenu" style="position:fixed; top:70px; right:40px; display:none; background:white; border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 18px 60px rgba(15,23,42,0.12); width:220px; z-index:50;">
         <a href="admin_dashboard.php?page=profile" style="display:block; padding:0.9rem 1rem; color:#111827; text-decoration:none;">Profile</a>
-        <a href="admin_dashboard.php?page=settings" style="display:block; padding:0.9rem 1rem; color:#111827; text-decoration:none;">Settings</a>
         <a href="logout.php" style="display:block; padding:0.9rem 1rem; color:#dc2626; text-decoration:none;">Logout</a>
     </div>
     <script>
@@ -1992,6 +1987,59 @@ if ($page === 'reports') {
             </form>
         </div>
     </div>
+    <div id="editInventoryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
+        <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+            <div class="panel-heading">
+                <h3>Edit Inventory Item</h3>
+                <button type="button" onclick="closeEditInventoryModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="edit_inventory">
+                <input type="hidden" name="inventory_id" id="edit_inv_id">
+                <div class="form-field">
+                    <label>Item Name</label>
+                    <input type="text" id="edit_inv_name" disabled style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                </div>
+                <div class="form-field" style="display:flex; gap:1rem;">
+                    <div style="flex:1;">
+                        <label>Quantity</label>
+                        <input type="number" step="0.01" name="quantity" id="edit_inv_qty" required>
+                    </div>
+                    <div style="flex:1;">
+                        <label>Unit</label>
+                        <input type="text" id="edit_inv_unit" disabled style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label>Status</label>
+                    <select name="status" id="edit_inv_status" required>
+                        <option value="In Stock">In Stock</option>
+                        <option value="Limited">Limited</option>
+                        <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+                    <button type="button" class="btn-secondary" style="flex:1;" onclick="closeEditInventoryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="flex:1;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openEditInventoryModal(id, name, qty, unit, status) {
+            document.getElementById('edit_inv_id').value = id;
+            document.getElementById('edit_inv_name').value = name;
+            document.getElementById('edit_inv_qty').value = qty;
+            document.getElementById('edit_inv_unit').value = unit;
+            document.getElementById('edit_inv_status').value = status;
+            document.getElementById('editInventoryModal').style.display = 'grid';
+        }
+        function closeEditInventoryModal() {
+            document.getElementById('editInventoryModal').style.display = 'none';
+        }
+    </script>
+
     <div id="sendAnnouncementModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; place-items:center; padding:2rem;">
         <div class="panel" style="width:100%; max-width:500px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="panel-heading">
