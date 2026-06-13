@@ -69,7 +69,7 @@ function getCampaignIcon($campaign_name, $urgency) {
 
 // Format currency
 function formatCurrency($amount) {
-    return '$' . number_format($amount, 0);
+    return '৳' . number_format($amount, 0);
 }
 
 // Format date

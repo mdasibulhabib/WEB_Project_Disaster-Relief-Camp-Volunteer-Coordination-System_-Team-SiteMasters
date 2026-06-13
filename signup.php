@@ -31,23 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hashed_password = password_hash($password, PASSWORD_BCRYPT);
             
             // Insert user
+            $status = ($role === 'donor') ? 'inactive' : 'active';
             $insert_query = "INSERT INTO users (role, full_name, email, phone, password, status) 
-                           VALUES ('$role', '$fullname', '$email', '$phone', '$hashed_password', 'active')";
+                           VALUES ('$role', '$fullname', '$email', '$phone', '$hashed_password', '$status')";
             
             if ($conn->query($insert_query)) {
-                $user_id = $conn->insert_id;
-                $_SESSION['user_id'] = $user_id;
-                $_SESSION['role'] = $role;
-                $_SESSION['full_name'] = $fullname;
-                
-                $success = 'Account created successfully!';
-                // Redirect to the correct dashboard based on role
-                if ($role === 'donor') {
-                    redirect('donor_dashboard.php');
-                } elseif ($role === 'camp_manager') {
-                    redirect('camp_manager_dashboard.php');
+                if ($status === 'inactive') {
+                    $success = 'Account created successfully! Your account is pending admin approval.';
                 } else {
-                    redirect('volunteer_dashboard.php');
+                    $user_id = $conn->insert_id;
+                    $_SESSION['user_id'] = $user_id;
+                    $_SESSION['role'] = $role;
+                    $_SESSION['full_name'] = $fullname;
+                    
+                    $success = 'Account created successfully!';
+                    // Redirect to the correct dashboard based on role
+                    if ($role === 'camp_manager') {
+                        redirect('camp_manager_dashboard.php');
+                    } else {
+                        redirect('volunteer_dashboard.php');
+                    }
                 }
             } else {
                 $error = 'Error creating account. Please try again.';

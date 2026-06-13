@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Create new donor user
             $password_hash = password_hash('donor_' . time(), PASSWORD_BCRYPT);
             $insert_donor = "INSERT INTO users (role, full_name, email, password, status) 
-                            VALUES ('donor', '$full_name', '$email', '$password_hash', 'active')";
+                            VALUES ('donor', '$full_name', '$email', '$password_hash', 'inactive')";
             
             if (!$conn->query($insert_donor)) {
                 $error_message = 'Error creating donor record: ' . $conn->error;
@@ -57,16 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $campaign_clause = $campaign_id ? $campaign_id : 'NULL';
             
             $insert_donation = "INSERT INTO donations (donor_id, campaign_id, amount, donation_type, status) 
-                               VALUES ($donor_id, $campaign_clause, $amount, '$donation_type', 'completed')";
+                               VALUES ($donor_id, $campaign_clause, $amount, '$donation_type', 'pending')";
             
             if ($conn->query($insert_donation)) {
-                // Update campaign raised amount if campaign_id exists
-                if ($campaign_id) {
-                    $conn->query("UPDATE campaigns SET raised_amount = raised_amount + $amount WHERE id = $campaign_id");
-                }
-                
                 $donation_success = true;
-                $success_message = "Thank you for your donation of \$$amount! Your contribution will make a real difference.";
+                $success_message = "Thank you for your donation of \$$amount! Your contribution is now pending verification and will make a real difference once approved.";
             } else {
                 $error_message = 'Error processing donation: ' . $conn->error;
             }
