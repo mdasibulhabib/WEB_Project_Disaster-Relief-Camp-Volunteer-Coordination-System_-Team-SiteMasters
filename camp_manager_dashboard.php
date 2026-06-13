@@ -90,6 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         $action = $_POST['action'];
         
+        if ($action === 'mark_notifications_read') {
+            $conn->query("UPDATE notifications SET is_read = 1 WHERE user_id = $user_id");
+            header("Location: camp_manager_dashboard.php?page=" . ($_GET['page'] ?? 'dashboard'));
+            exit();
+        }
+        
         if ($action === 'register_family') {
             $head = sanitize($_POST['head_name']);
             $members = intval($_POST['family_members']);
@@ -244,6 +250,14 @@ $stats = [
 
 $unread_query = $conn->query("SELECT COUNT(*) AS count FROM notifications WHERE user_id = $user_id AND is_read = 0");
 $unread_count = $unread_query ? $unread_query->fetch_assoc()['count'] : 0;
+
+$all_notifications_query = $conn->query("SELECT * FROM notifications WHERE user_id = $user_id ORDER BY created_at DESC LIMIT 5");
+$all_notifications = [];
+if ($all_notifications_query) {
+    while ($n = $all_notifications_query->fetch_assoc()) {
+        $all_notifications[] = $n;
+    }
+}
 
 // Fetch Recent Data for Dashboard
 $chart_inventory_res = $conn->query("SELECT item_name, quantity FROM inventory WHERE camp_id = $camp_id ORDER BY quantity DESC LIMIT 5");
@@ -411,6 +425,7 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; backdrop-filter: blur(4px); }
         .modal.show { display: flex; }
         .modal-content { background: white; padding: 1.8rem; border-radius: var(--radius-lg); width: 90%; max-width: 480px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .cm-dropdown.show { display: block !important; }
 
 
         /* Supplies Specific Styles */
@@ -471,7 +486,39 @@ $field_reports = []; while($row = $field_reports_res->fetch_assoc()) { $field_re
                     elseif($page === 'inventory') echo 'Manage camp inventory';
                     else echo 'Managing: ' . htmlspecialchars($camp_name); 
                 ?></span></div>
-                <div class="header-actions">
+                <div class="header-actions" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="position: relative;">
+                        <button class="btn btn-outline" onclick="document.getElementById('cmNotifDropdown').classList.toggle('show')">
+                            <i data-lucide="bell" style="width:18px;"></i>
+                            <?php if ($unread_count > 0): ?>
+                                <span style="position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; width: 18px; height: 18px; border-radius: 50%; font-size: 0.65rem; display: grid; place-items: center; font-weight: bold;"><?php echo $unread_count; ?></span>
+                            <?php endif; ?>
+                        </button>
+                        <div id="cmNotifDropdown" style="display: none; position: absolute; right: 0; top: calc(100% + 10px); width: 320px; background: white; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid var(--border); z-index: 50; overflow: hidden;" class="cm-dropdown">
+                            <div style="padding: 1rem; border-bottom: 1px solid var(--border); background: var(--background);">
+                                <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700;">Notifications</h4>
+                            </div>
+                            <?php if (empty($all_notifications)): ?>
+                                <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">No new notifications</div>
+                            <?php else: ?>
+                                <div style="max-height: 300px; overflow-y: auto;">
+                                    <?php foreach ($all_notifications as $notif): ?>
+                                        <div style="padding: 1rem; border-bottom: 1px solid var(--border); background: <?php echo $notif['is_read'] ? '#ffffff' : 'var(--primary-light)'; ?>;">
+                                            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);"><?php echo htmlspecialchars($notif['title']); ?></div>
+                                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;"><?php echo htmlspecialchars($notif['message']); ?></div>
+                                            <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.5rem;"><?php echo date('M d, H:i', strtotime($notif['created_at'])); ?></div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div style="padding: 0.75rem; text-align: center; border-top: 1px solid var(--border); background: var(--background);">
+                                    <form method="POST" style="margin: 0;">
+                                        <input type="hidden" name="action" value="mark_notifications_read">
+                                        <button type="submit" style="background: none; border: none; color: var(--primary); font-size: 0.85rem; font-weight: 700; cursor: pointer;">Mark all as read</button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                     <?php if ($page === 'families'): ?>
                         <button class="btn btn-primary" style="background: #0f172a;" onclick="toggleModal('registerModal')"><i data-lucide="plus" style="width:18px;"></i> Register Manually</button>
                     <?php elseif ($page === 'volunteers'): ?>

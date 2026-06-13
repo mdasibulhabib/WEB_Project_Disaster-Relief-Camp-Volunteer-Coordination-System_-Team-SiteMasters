@@ -28,7 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Verify password
             if (password_verify($password, $user['password'])) {
-                // Login successful
+                if ($user['status'] !== 'active') {
+                    $error = 'Your account is pending approval or inactive.';
+                } else {
+                    // Login successful
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'];
@@ -47,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     redirect('donor_dashboard.php');
                 } else {
                     redirect('index.php');
+                }
                 }
             } else {
                 $error = 'Incorrect password';
