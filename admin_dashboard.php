@@ -243,6 +243,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($action === 'send_chat_message') {
+            $receiver_id = intval($_POST['receiver_id']);
+            $msg = sanitize($_POST['message'] ?? '');
+            if ($msg && $receiver_id) {
+                $conn->query("INSERT INTO messages (sender_id, receiver_id, message_text) VALUES ($user_id, $receiver_id, '$msg')");
+                header("Location: admin_dashboard.php?page=chat&user_id=$receiver_id");
+                exit();
+            }
+        }
+
         if ($action === 'verify_donation') {
             $donation_id = intval($_POST['donation_id']);
             
@@ -282,6 +292,7 @@ $stats_query = [
     'affected_people' => $conn->query("SELECT SUM(current_occupancy) FROM camps")->fetch_row()[0] ?? 0,
     'total_donations' => $conn->query("SELECT SUM(amount) FROM donations WHERE status = 'completed'")->fetch_row()[0] ?? 0,
     'alerts_count' => $conn->query("SELECT COUNT(*) FROM emergency_reports WHERE status IN ('pending', 'in_progress')")->fetch_row()[0] ?? 0,
+    'unread_chat' => $conn->query("SELECT COUNT(*) FROM messages WHERE receiver_id = $user_id AND is_read = 0")->fetch_row()[0] ?? 0,
 ];
 
 
@@ -580,6 +591,7 @@ if ($page === 'reports') {
                 <li class="menu-item"><a href="admin_dashboard.php?page=tasks" class="menu-link <?php echo $page === 'tasks' ? 'active' : ''; ?>"><span class="menu-icon">📋</span>Task Assignment</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=inventory" class="menu-link <?php echo $page === 'inventory' ? 'active' : ''; ?>"><span class="menu-icon">📦</span>Inventory</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=alerts" class="menu-link <?php echo $page === 'alerts' ? 'active' : ''; ?>"><span class="menu-icon">⚠️</span>Alerts<span class="menu-badge"><?php echo $stats_query['alerts_count']; ?></span></a></li>
+                <li class="menu-item"><a href="admin_dashboard.php?page=chat" class="menu-link <?php echo $page === 'chat' ? 'active' : ''; ?>"><span class="menu-icon">💬</span>Support Chat<?php if($stats_query['unread_chat'] > 0): ?><span class="menu-badge" style="background: #ef4444;"><?php echo $stats_query['unread_chat']; ?></span><?php endif; ?></a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=reports" class="menu-link <?php echo $page === 'reports' ? 'active' : ''; ?>"><span class="menu-icon">📈</span>Reports</a></li>
                 <li class="menu-item"><a href="admin_dashboard.php?page=settings" class="menu-link <?php echo $page === 'settings' ? 'active' : ''; ?>"><span class="menu-icon">⚙️</span>Settings</a></li>
             </ul>
@@ -1375,6 +1387,89 @@ if ($page === 'reports') {
                             </table>
                         </div>
                     </div>
+                <?php elseif ($page === 'chat'): ?>
+                    <div class="page-header">
+                        <div>
+                            <div class="page-title">Support Chat</div>
+                            <div class="page-subtitle">Communicate with Donors and Camp Managers</div>
+                        </div>
+                    </div>
+                    <?php 
+                    $chat_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+                    if ($chat_user_id == 0): 
+                        $chat_users = $conn->query("
+                            SELECT u.id, u.full_name, u.role, 
+                                (SELECT message_text FROM messages WHERE (sender_id=u.id OR receiver_id=u.id) ORDER BY created_at DESC LIMIT 1) as last_msg,
+                                (SELECT created_at FROM messages WHERE (sender_id=u.id OR receiver_id=u.id) ORDER BY created_at DESC LIMIT 1) as last_msg_time,
+                                (SELECT COUNT(*) FROM messages WHERE sender_id=u.id AND receiver_id=$user_id AND is_read=0) as unread_count
+                            FROM users u 
+                            WHERE u.role IN ('donor', 'camp_manager', 'volunteer') 
+                            ORDER BY COALESCE(last_msg_time, '1970-01-01') DESC, u.full_name ASC
+                        ");
+                    ?>
+                        <div class="panel">
+                            <h3>Start or Continue a Conversation</h3>
+                            <table class="table" style="margin-top: 1rem;">
+                                <thead><tr><th>User</th><th>Role</th><th>Last Message</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    <?php if ($chat_users && $chat_users->num_rows > 0): while($cu = $chat_users->fetch_assoc()): ?>
+                                        <tr>
+                                            <td><strong><?php echo htmlspecialchars($cu['full_name']); ?></strong></td>
+                                            <td><span class="badge active"><?php echo ucfirst(str_replace('_', ' ', $cu['role'])); ?></span></td>
+                                            <td style="color:#6b7280; font-size:0.9rem; <?php echo $cu['unread_count'] > 0 ? 'font-weight:bold; color:#111827;' : ''; ?>">
+                                                <?php echo $cu['last_msg'] ? htmlspecialchars(substr($cu['last_msg'], 0, 50)) . '...' : '<i>No messages yet</i>'; ?>
+                                                <?php if($cu['unread_count'] > 0): ?><span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 999px; font-size: 0.7rem; margin-left: 5px;"><?php echo $cu['unread_count']; ?> new</span><?php endif; ?>
+                                            </td>
+                                            <td><a href="admin_dashboard.php?page=chat&user_id=<?php echo $cu['id']; ?>" class="btn-primary" style="text-decoration:none;">Open Chat</a></td>
+                                        </tr>
+                                    <?php endwhile; else: ?>
+                                        <tr><td colspan="4" style="text-align:center;">No users available to chat with.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: 
+                        $target_user = $conn->query("SELECT * FROM users WHERE id = $chat_user_id")->fetch_assoc();
+                        $conn->query("UPDATE messages SET is_read = 1 WHERE sender_id = $chat_user_id AND receiver_id = $user_id AND is_read = 0");
+                    ?>
+                        <div class="panel" style="max-width: 800px;">
+                            <div class="panel-heading" style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3>Chat with <?php echo htmlspecialchars($target_user['full_name'] ?? 'User'); ?> <span class="badge active" style="font-size:0.7rem;"><?php echo ucfirst($target_user['role'] ?? ''); ?></span></h3>
+                                <a href="admin_dashboard.php?page=chat" class="btn-secondary" style="text-decoration:none;">Back to List</a>
+                            </div>
+                            <div style="height: 350px; background: #f8fafc; border-radius: 18px; padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;" id="chatContainer">
+                                <?php 
+                                $messages = $conn->query("SELECT * FROM messages WHERE (sender_id = $user_id AND receiver_id = $chat_user_id) OR (sender_id = $chat_user_id AND receiver_id = $user_id) ORDER BY created_at ASC");
+                                if ($messages && $messages->num_rows > 0):
+                                    while ($msg = $messages->fetch_assoc()):
+                                        $is_me = ($msg['sender_id'] == $user_id);
+                                ?>
+                                    <div style="background: <?php echo $is_me ? '#2563eb' : 'white'; ?>; color: <?php echo $is_me ? 'white' : '#111827'; ?>; padding: 0.8rem 1.2rem; border-radius: 14px; max-width: 80%; <?php echo $is_me ? 'align-self: flex-end; border-bottom-right-radius: 4px;' : 'align-self: flex-start; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-bottom-left-radius: 4px;'; ?>">
+                                        <div style="font-size: 0.95rem; line-height: 1.4;"><?php echo htmlspecialchars($msg['message_text']); ?></div>
+                                        <div style="font-size: 0.7rem; color: <?php echo $is_me ? '#93c5fd' : '#9ca3af'; ?>; margin-top: 0.4rem; text-align: right;">
+                                            <?php echo date('M d, g:i a', strtotime($msg['created_at'])); ?>
+                                        </div>
+                                    </div>
+                                <?php endwhile; else: ?>
+                                    <div style="text-align: center; color: #6b7280; font-size: 0.9rem; margin-top: auto; margin-bottom: auto;">
+                                        No messages yet. Start the conversation.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <form method="POST">
+                                <input type="hidden" name="action" value="send_chat_message">
+                                <input type="hidden" name="receiver_id" value="<?php echo $chat_user_id; ?>">
+                                <div style="display: flex; gap: 1rem;">
+                                    <input type="text" name="message" placeholder="Type a message..." style="flex: 1; border: 1px solid #d1d5db; border-radius: 14px; padding: 0.95rem 1rem;" required autocomplete="off" autofocus>
+                                    <button type="submit" class="btn-primary">Send</button>
+                                </div>
+                            </form>
+                            <script>
+                                const chatContainer = document.getElementById('chatContainer');
+                                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+                            </script>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </main>
