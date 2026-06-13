@@ -261,13 +261,13 @@ $sampleData = array(
     // Sample users
     "INSERT IGNORE INTO users (id, role, full_name, email, phone, password, location) VALUES
     (1, 'admin', 'Admin User', 'admin@disasterrelief.bd', '+8801234567890', '" . password_hash('admin123', PASSWORD_BCRYPT) . "', 'Dhaka'),
-    (2, 'camp_manager', 'Rajesh Kumar', 'rajesh@disasterrelief.bd', '+8801712345678', '" . password_hash('manager123', PASSWORD_BCRYPT) . "', 'Mumbai'),
-    (3, 'volunteer', 'Rahul Singh', 'rahul@disasterrelief.bd', '+8801987654321', '" . password_hash('volunteer123', PASSWORD_BCRYPT) . "', 'Camp Alpha'),
-    (4, 'donor', 'John Doe', 'john@example.com', '+8801111111111', '" . password_hash('donor123', PASSWORD_BCRYPT) . "', 'Dhaka')",
+    (2, 'camp_manager', 'Karim Ahmed', 'karim@disasterrelief.bd', '+8801712345678', '" . password_hash('manager123', PASSWORD_BCRYPT) . "', 'Sylhet'),
+    (3, 'volunteer', 'Tanvir Ahmed', 'tanvir@disasterrelief.bd', '+8801987654321', '" . password_hash('volunteer123', PASSWORD_BCRYPT) . "', 'Camp Alpha'),
+    (4, 'donor', 'Hasan Mahmud', 'hasan@example.com', '+8801111111111', '" . password_hash('donor123', PASSWORD_BCRYPT) . "', 'Dhaka')",
 
     // Sample camps
     "INSERT IGNORE INTO camps (id, camp_name, location, manager_id, capacity, current_occupancy, status) VALUES
-    (1, 'Camp Alpha', 'Mumbai', 2, 500, 350, 'active'),
+    (1, 'Camp Alpha', 'Sylhet', 2, 500, 350, 'active'),
     (2, 'Camp Beta', 'Dhaka', 2, 300, 250, 'active')",
 
     // Sample campaigns
@@ -288,8 +288,21 @@ $sampleData = array(
     "INSERT IGNORE INTO schedules (id, user_id, day_of_week, start_time, end_time, location) VALUES
     (1, 3, 'Monday', '09:00:00', '17:00:00', 'Central Relief Camp'),
     (2, 3, 'Wednesday', '13:00:00', '21:00:00', 'Central Relief Camp'),
-    (3, 3, 'Friday', '09:00:00', '17:00:00', 'North Emergency Shelter')"
+    (3, 3, 'Friday', '09:00:00', '17:00:00', 'North Emergency Shelter')",
+    
+    // Sample Volunteer Assignments
+    "INSERT IGNORE INTO volunteer_assignments (volunteer_id, camp_id, assignment_date, status) VALUES
+    (3, 1, '2026-01-01 09:00:00', 'active')",
+
+    // Sample Inventory
+    "INSERT IGNORE INTO inventory (camp_id, item_name, category, quantity, unit, status) VALUES
+    (1, 'Food Packets', 'Food', 500, 'packets', 'In Stock'),
+    (1, 'Water Bottles', 'Water', 1000, 'bottles', 'In Stock'),
+    (1, 'Medical Kits', 'Medical', 50, 'kits', 'In Stock'),
+    (1, 'Blankets', 'Supplies', 200, 'pieces', 'In Stock'),
+    (2, 'Rice Bags', 'Food', 100, 'bags', 'In Stock')"
 );
+
 
 // Insert sample data
 foreach ($sampleData as $query) {
