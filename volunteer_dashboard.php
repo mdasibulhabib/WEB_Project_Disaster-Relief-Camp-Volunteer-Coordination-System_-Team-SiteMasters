@@ -68,8 +68,32 @@ $camp_query = $conn->query("SELECT camps.* FROM camps
     JOIN volunteer_assignments ON camps.id = volunteer_assignments.camp_id 
     WHERE volunteer_assignments.volunteer_id = $user_id AND volunteer_assignments.status = 'active' LIMIT 1");
 $camp = $camp_query ? $camp_query->fetch_assoc() : null;
-$camp_name = $camp ? $camp['camp_name'] : 'Not Assigned';
-$camp_id = $camp ? $camp['id'] : null;
+
+if (!$camp) {
+    // Try to find camp matching user location
+    $user_location = $user['location'] ?? '';
+    if (!empty($user_location)) {
+        $camp_query = $conn->query("SELECT * FROM camps WHERE location = '" . $conn->real_escape_string($user_location) . "' LIMIT 1");
+        $camp = $camp_query ? $camp_query->fetch_assoc() : null;
+    }
+    // If still no camp, get the first camp in the database as fallback
+    if (!$camp) {
+        $camp_query = $conn->query("SELECT * FROM camps ORDER BY id ASC LIMIT 1");
+        $camp = $camp_query ? $camp_query->fetch_assoc() : null;
+    }
+    // If a camp is found, dynamically create the assignment
+    if ($camp) {
+        $camp_id = $camp['id'];
+        $conn->query("INSERT INTO volunteer_assignments (volunteer_id, camp_id, status) VALUES ($user_id, " . intval($camp_id) . ", 'active')");
+        $camp_name = $camp['camp_name'];
+    } else {
+        $camp_name = 'Not Assigned';
+        $camp_id = null;
+    }
+} else {
+    $camp_name = $camp['camp_name'];
+    $camp_id = $camp['id'];
+}
 
 // Fetch inventory for distribution tasks
 $inventory_items = [];
@@ -189,6 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Volunteer Dashboard - DisasterRelief</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         * {
             margin: 0;
@@ -689,50 +714,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         /* Chat Interface */
         .chat-container {
             display: grid;
-            grid-template-columns: 250px 1fr;
-            gap: 1rem;
-            height: calc(100vh - 200px);
+            grid-template-columns: 280px 1fr;
+            gap: 0;
+            height: 550px;
             background: white;
-            border-radius: 8px;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
 
         .chat-list {
-            border-right: 1px solid #e0e0e0;
+            border-right: 1px solid #e2e8f0;
             overflow-y: auto;
+            background: #ffffff;
         }
 
         .chat-item {
-            padding: 1rem;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #f1f5f9;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: all 0.2s ease;
+            border-left: 4px solid transparent;
         }
 
         .chat-item:hover {
-            background: #f5f5f5;
+            background: #f8fafc;
         }
 
         .chat-item.active {
-            background: #e8f4ff;
-            border-left: 3px solid #1a73e8;
+            background: #f0f4ff;
+            border-left: 4px solid #4f46e5;
         }
 
         .chat-item-name {
-            font-weight: 600;
+            font-weight: 700;
             font-size: 0.95rem;
-            color: #1a1a1a;
+            color: #0f172a;
         }
 
         .chat-item-status {
             font-size: 0.8rem;
-            color: #999;
+            color: #64748b;
+            margin-top: 2px;
         }
 
         .chat-window {
             display: flex;
             flex-direction: column;
+            background: #ffffff;
         }
 
         .chat-messages {
@@ -742,83 +772,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            background: #f8fafc;
         }
 
         .message {
             display: flex;
-            gap: 0.8rem;
+            gap: 0.75rem;
+            max-width: 80%;
             margin-bottom: 0.5rem;
         }
 
         .message.sent {
-            justify-content: flex-end;
+            align-self: flex-end;
+            flex-direction: row-reverse;
         }
 
         .message-avatar {
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            background: #667eea;
+            background: #4f46e5;
             color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: grid;
+            place-items: center;
             font-size: 0.8rem;
+            font-weight: 700;
             flex-shrink: 0;
         }
 
         .message-content {
             display: flex;
             flex-direction: column;
-            gap: 0.3rem;
+            gap: 0.25rem;
         }
 
         .message-text {
-            background: #f0f0f0;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            max-width: 400px;
+            background: white;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            color: #0f172a;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
             word-wrap: break-word;
         }
 
         .message.sent .message-text {
-            background: #1a73e8;
+            background: #4f46e5;
             color: white;
+            border-color: #4f46e5;
         }
 
         .message-time {
-            font-size: 0.75rem;
-            color: #999;
+            font-size: 0.7rem;
+            color: #94a3b8;
         }
 
         .chat-input {
-            padding: 1rem;
-            border-top: 1px solid #e0e0e0;
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid #e2e8f0;
             display: flex;
-            gap: 0.8rem;
+            gap: 0.75rem;
+            background: white;
         }
 
         .chat-input input {
             flex: 1;
-            padding: 0.8rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 0.95rem;
+            padding: 0.75rem 1.25rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: #f8fafc;
+            transition: all 0.2s ease;
         }
 
         .chat-input input:focus {
             outline: none;
-            border-color: #1a73e8;
+            border-color: #4f46e5;
+            background: white;
         }
 
         .chat-input button {
-            background: #1a73e8;
+            background: #4f46e5;
             color: white;
             border: none;
-            padding: 0.8rem 1.5rem;
-            border-radius: 4px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .chat-input button:hover {
+            background: #4338ca;
+        }
+
+        .btn-outline {
+            background: white;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+        .btn-outline:hover {
+            background: #f8fafc;
+            color: #0f172a;
         }
 
         /* Emergency Form */
@@ -1091,18 +1148,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <!-- Main Content -->
         <div class="main-content">
             <!-- Header -->
-            <header class="header">
+            <header class="header" style="background: white; padding: 1.25rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10;">
                 <div class="header-left">
-                    <h2 style="color: #1a1a1a;">DisasterRelief</h2>
+                    <div>
+                        <h1 class="header-title" style="font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 0;"><?php echo ucfirst(str_replace('_', ' ', $page === 'chat' ? 'Chat' : ($page === 'field_reports' ? 'Field Reports' : ($page === 'supplies' ? 'Supplies' : ($page === 'report' ? 'Submit Report' : $page))))); ?></h1>
+                        <span class="header-subtitle" style="font-size: 0.9rem; color: #64748b; font-weight: 500;">
+                            <?php 
+                                if ($page === 'chat') {
+                                    echo 'Managing: ' . htmlspecialchars($camp_name);
+                                } elseif ($page === 'field_reports') {
+                                    echo 'Activity and incident reports';
+                                } elseif ($page === 'supplies') {
+                                    echo 'Delivered relief item list';
+                                } elseif ($page === 'report') {
+                                    echo 'Submit report to the camp manager';
+                                } else {
+                                    echo 'Assigned to: ' . htmlspecialchars($camp_name); 
+                                }
+                            ?>
+                        </span>
+                    </div>
                 </div>
-                <div class="header-right">
-                    <div class="notification-bell" onclick="document.getElementById('notifDropdownVol').classList.toggle('show')">
-                        🔔
-                        <?php if ($unread_count > 0): ?>
-                            <span class="notification-badge"><?php echo $unread_count; ?></span>
-                        <?php endif; ?>
+                <div class="header-right" style="display: flex; align-items: center; gap: 0.75rem;">
+                    <!-- Notification Bell Button -->
+                    <div style="position: relative;">
+                        <button class="btn btn-outline" style="background: white; border: 1px solid #e2e8f0; color: #64748b; border-radius: 10px; width: 42px; height: 42px; display: grid; place-items: center; cursor: pointer; position: relative;" onclick="document.getElementById('notifDropdownVol').classList.toggle('show'); event.stopPropagation();">
+                            <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
+                            <?php if ($unread_count > 0): ?>
+                                <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #ef4444; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;"><?php echo $unread_count; ?></span>
+                            <?php endif; ?>
+                        </button>
                         
-                        <div id="notifDropdownVol" class="dropdown-menu" style="width: 320px; right: -50px; padding: 0;">
+                        <div id="notifDropdownVol" class="dropdown-menu" style="width: 320px; right: 0; top: calc(100% + 10px); padding: 0; position: absolute; z-index: 50;">
                             <div style="padding: 1.25rem; border-bottom: 1px solid #f3f4f6; background: #f8fafc; text-align: left;">
                                 <p style="font-weight: 700; font-size: 0.95rem; color: #0f172a; margin: 0;">Notifications</p>
                             </div>
@@ -1127,6 +1204,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <?php endif; ?>
                         </div>
                     </div>
+
+                    <!-- Refresh Button -->
+                    <button class="btn btn-outline" style="background: white; border: 1px solid #e2e8f0; color: #64748b; border-radius: 10px; width: 42px; height: 42px; display: grid; place-items: center; cursor: pointer;" onclick="location.reload()">
+                        <i data-lucide="refresh-cw" style="width: 18px; height: 18px;"></i>
+                    </button>
+
+                    <!-- Report Button -->
+                    <button class="btn btn-primary" style="background: #4f46e5; color: white; border-radius: 10px; height: 42px; padding: 0 1.25rem; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer;" onclick="location.href='volunteer_dashboard.php?page=report'">
+                        <i data-lucide="file-text" style="width: 18px; height: 18px;"></i>
+                        Report
+                    </button>
+
+                    <!-- Profile Dropdown -->
                     <div class="profile-dropdown">
                         <button type="button" class="dropdown-button" onclick="toggleProfileMenu()">
                             <div class="user-avatar"><?php echo strtoupper(substr($user['full_name'], 0, 1)); ?></div>
@@ -1508,8 +1598,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 <?php elseif ($page === 'chat'): ?>
                     <!-- Chat Page (Messages) -->
-                    <h1 class="page-title">Messages</h1>
-                    <p class="page-subtitle">Communicate with System Admins and your Camp Manager</p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2 style="font-size: 1.5rem; font-weight: 700; color: #0f172a; margin: 0;">Support & Team Chat</h2>
+                        <div style="display: flex; gap: 10px;">
+                            <span class="badge" style="background: #eff6ff; color: #2563eb; font-size: 0.8rem; padding: 4px 12px; border-radius: 999px; font-weight: 600;">Direct Messages</span>
+                        </div>
+                    </div>
 
                     <?php
                     // Get list of contacts: all admins and the manager of the assigned camp (if any)
@@ -1553,7 +1647,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 <?php foreach ($contacts_list as $cu): ?>
                                     <div class="chat-item <?php echo ($cu['id'] == $chat_user_id) ? 'active' : ''; ?>" onclick="location.href='volunteer_dashboard.php?page=chat&user_id=<?php echo $cu['id']; ?>'">
                                         <div class="chat-item-name"><?php echo htmlspecialchars($cu['full_name']); ?></div>
-                                        <div class="chat-item-status" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">
+                                        <div class="chat-item-status">
                                             <?php echo ucfirst(str_replace('_', ' ', $cu['role'])); ?>
                                             <?php if ($cu['unread_count'] > 0): ?>
                                                 <span style="background: #ef4444; color: white; padding: 1px 5px; border-radius: 999px; font-size: 0.65rem; font-weight: bold; margin-left: 5px; float: right;"><?php echo $cu['unread_count']; ?></span>
@@ -1582,10 +1676,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 // Fetch messages
                                 $messages = $conn->query("SELECT * FROM messages WHERE (sender_id = $user_id AND receiver_id = $chat_user_id) OR (sender_id = $chat_user_id AND receiver_id = $user_id) ORDER BY created_at ASC");
                             ?>
-                                <div style="padding: 1rem; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; background: #fff;">
+                                <div style="padding: 1rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; background: #fff;">
                                     <div>
-                                        <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a;"><?php echo htmlspecialchars($target_user['full_name']); ?></h3>
-                                        <span class="badge active" style="font-size:0.7rem; padding: 2px 8px; background: #eff6ff; color: #3b82f6; border-radius: 999px; font-weight: 600;"><?php echo ucfirst(str_replace('_', ' ', $target_user['role'])); ?></span>
+                                        <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;"><?php echo htmlspecialchars($target_user['full_name']); ?></h3>
+                                        <span class="badge" style="font-size: 0.7rem; padding: 2px 8px; background: #eff6ff; color: #2563eb; border-radius: 999px; font-weight: 600;"><?php echo ucfirst(str_replace('_', ' ', $target_user['role'])); ?></span>
                                     </div>
                                 </div>
 
@@ -1596,11 +1690,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                             $is_me = ($msg['sender_id'] == $user_id);
                                         ?>
                                             <div class="message <?php echo $is_me ? 'sent' : ''; ?>">
-                                                <?php if (!$is_me): ?>
-                                                    <div class="message-avatar">
-                                                        <?php echo strtoupper(substr($target_user['full_name'], 0, 1)); ?>
-                                                    </div>
-                                                <?php endif; ?>
                                                 <div class="message-content">
                                                     <div class="message-text">
                                                         <?php echo htmlspecialchars($msg['message_text']); ?>
@@ -1623,7 +1712,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                     <input type="hidden" name="action" value="send_chat_message">
                                     <input type="hidden" name="receiver_id" value="<?php echo $chat_user_id; ?>">
                                     <div class="chat-input">
-                                        <input type="text" name="message" placeholder="Type your message..." required autocomplete="off" autofocus>
+                                        <input type="text" name="message" placeholder="Type a message..." required autocomplete="off" autofocus>
                                         <button type="submit">Send</button>
                                     </div>
                                 </form>
@@ -1634,6 +1723,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <?php endif; ?>
                         </div>
                     </div>
+                    <script>
+                        const chatContainer = document.getElementById('chatContainer');
+                        if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+                    </script>
 
                 <?php elseif ($page === 'report'): ?>
                     <!-- Report Issue Page -->
@@ -1979,6 +2072,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             const menu = document.getElementById('volProfileMenu');
             if (menu) menu.classList.toggle('show');
         }
+        lucide.createIcons();
     </script>
 </body>
 </html>
